@@ -119,6 +119,16 @@
     <div id="game-arena-wrapper">
       <canvas id="game-canvas"></canvas>
 
+      <!-- Mobile Fullscreen Banner (Tap to play full screen) -->
+      <button id="mobile-fs-banner" class="mobile-fs-banner" type="button">
+        <span>📱</span> Tap to Open Fullscreen Arena ⤢
+      </button>
+
+      <!-- Mobile Exit Fullscreen Button (Active only in mobile-fullscreen) -->
+      <button id="mobile-exit-fs-btn" class="mobile-exit-fs-btn" type="button" title="Exit Fullscreen">
+        ⤓ Exit Fullscreen
+      </button>
+
       <!-- Green Theme Revive Vignette & Revive Alert Banner -->
       <div id="heal-vignette" class="heal-vignette-overlay"></div>
       <div id="revive-toast" class="revive-alert-toast">
@@ -160,13 +170,14 @@
                   100</span>
               </div>
               <div class="health-hud-bar">
-                <div id="hud-health-bar-fill"></div>
+                <div id="hud-health-bar-fill" style="width: 100%;"></div>
               </div>
-              <div class="regen-hud-row"
-                title="Move safely for 10 seconds without hits to revive (activates when HP drops to ≤ 50)">
-                <span class="regen-hud-label">🌱 Regen</span>
-                <div class="regen-hud-bar">
-                  <div id="hud-regen-bar-fill"></div>
+              <!-- 10-Second Movement Revive Progress Meter -->
+              <div class="health-hud-bar"
+                style="height: 4px; margin-top: 2px; background: rgba(0,0,0,0.08); border-radius: 3px;"
+                title="Continuous Revive Meter (Active below 50 HP until 100 HP is reached)">
+                <div id="hud-regen-bar-fill"
+                  style="width: 0%; height: 100%; background: #10b981; border-radius: 3px; transition: width 0.15s ease;">
                 </div>
               </div>
             </div>
@@ -199,7 +210,7 @@
       <div id="mobile-touch-overlay" class="mobile-touch-overlay">
         <!-- Floating joystick zone on left side -->
         <div id="joystick-zone" class="joystick-zone">
-          <div id="virtual-joystick" class="virtual-joystick hidden">
+          <div id="virtual-joystick" class="virtual-joystick">
             <div class="joystick-ring"></div>
             <div class="joystick-knob"></div>
           </div>

@@ -175,7 +175,10 @@ class CuteSlimeGame {
   resize() {
     if (!this.canvas) return;
     const arenaBox = document.getElementById('game-arena-wrapper');
-    if (arenaBox) {
+    if (arenaBox && arenaBox.classList.contains('mobile-fullscreen')) {
+      this.canvas.width = window.innerWidth;
+      this.canvas.height = window.innerHeight;
+    } else if (arenaBox) {
       this.canvas.width = arenaBox.clientWidth;
       this.canvas.height = arenaBox.clientHeight;
     } else {
@@ -183,20 +186,68 @@ class CuteSlimeGame {
       this.canvas.height = window.innerHeight;
     }
     if (this.minimapCanvas) {
-      this.minimapCanvas.width = 125;
-      this.minimapCanvas.height = 125;
+      this.minimapCanvas.width = 115;
+      this.minimapCanvas.height = 115;
     }
   }
 
   bindEvents() {
     window.addEventListener('resize', () => this.resize());
+    window.addEventListener('orientationchange', () => {
+      setTimeout(() => this.resize(), 100);
+      setTimeout(() => this.resize(), 300);
+    });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', () => {
+        if (this.isMobileDevice()) this.resize();
+      });
+    }
 
-    // Scroll isolation: prevent webpage scrolling when scrolling inside the arena wrapper
+    // Automatic Mobile Fullscreen: touching or clicking the arena enters full screen on iPhone / mobile
     const arenaWrapper = document.getElementById('game-arena-wrapper');
     if (arenaWrapper) {
+      arenaWrapper.addEventListener('touchstart', (e) => {
+        if (this.isMobileDevice()) {
+          this.enterMobileFullscreenIfApplicable();
+        }
+      }, { passive: true });
+
+      arenaWrapper.addEventListener('click', (e) => {
+        if (this.isMobileDevice()) {
+          this.enterMobileFullscreenIfApplicable();
+        }
+      });
+
+      // Scroll isolation: prevent webpage scrolling when scrolling inside the arena wrapper
       arenaWrapper.addEventListener('wheel', (e) => {
         e.preventDefault();
       }, { passive: false });
+    }
+
+    // Mobile Fullscreen Banner tap handler
+    const mobileFsBanner = document.getElementById('mobile-fs-banner');
+    if (mobileFsBanner) {
+      mobileFsBanner.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.enterMobileFullscreenIfApplicable();
+      });
+      mobileFsBanner.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
+        this.enterMobileFullscreenIfApplicable();
+      }, { passive: true });
+    }
+
+    // Mobile Exit Fullscreen Button tap handler
+    const mobileExitBtn = document.getElementById('mobile-exit-fs-btn');
+    if (mobileExitBtn) {
+      mobileExitBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.exitMobileFullscreen();
+      });
+      mobileExitBtn.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
+        this.exitMobileFullscreen();
+      }, { passive: true });
     }
 
     // Fullscreen change listener to resize canvas properly
@@ -545,6 +596,10 @@ class CuteSlimeGame {
 
   // Request fullscreen on game arena container when entering game
   requestArenaFullscreen() {
+    if (this.isMobileDevice()) {
+      this.enterMobileFullscreenIfApplicable();
+      return;
+    }
     const elem = document.getElementById('game-arena-wrapper');
     if (elem && elem.requestFullscreen && !document.fullscreenElement) {
       elem.requestFullscreen().catch(() => {});
@@ -552,38 +607,58 @@ class CuteSlimeGame {
   }
 
   toggleFullscreen() {
+    if (this.isMobileDevice()) {
+      const arenaBox = document.getElementById('game-arena-wrapper');
+      if (arenaBox && arenaBox.classList.contains('mobile-fullscreen')) {
+        this.exitMobileFullscreen();
+      } else {
+        this.enterMobileFullscreenIfApplicable();
+      }
+      return;
+    }
+
     const elem = document.getElementById('game-arena-wrapper');
     if (!document.fullscreenElement) {
-      if (elem && elem.requestFullscreen) elem.requestFullscreen();
+      if (elem && elem.requestFullscreen) elem.requestFullscreen().catch(() => {});
     } else {
-      if (document.exitFullscreen) document.exitFullscreen();
+      if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
     }
   }
 
-  // Mobile Device Detection & Touch Control Systems
+  // Mobile Device Detection & Touch Control Systems (100% Reliable for iPhone & Android)
   isMobileDevice() {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
-      || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) 
-      || window.innerWidth <= 820;
+    const hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isNarrow = window.innerWidth <= 950;
+    return isMobileUA || (hasTouch && (isNarrow || navigator.maxTouchPoints > 1)) || isNarrow;
   }
 
   enterMobileFullscreenIfApplicable() {
-    if (this.isMobileDevice()) {
-      const arenaBox = document.getElementById('game-arena-wrapper');
-      if (arenaBox) {
-        arenaBox.classList.add('mobile-fullscreen');
-        document.body.style.overflow = 'hidden';
-        setTimeout(() => this.resize(), 60);
-      }
+    if (!this.isMobileDevice()) return;
+    const arenaBox = document.getElementById('game-arena-wrapper');
+    if (arenaBox && !arenaBox.classList.contains('mobile-fullscreen')) {
+      arenaBox.classList.add('mobile-fullscreen');
+      document.documentElement.classList.add('in-mobile-fullscreen');
+      document.body.classList.add('in-mobile-fullscreen');
+      document.body.style.overflow = 'hidden';
+      // Trigger multiple resizes to adjust as iOS Safari toolbar settles
+      this.resize();
+      setTimeout(() => this.resize(), 60);
+      setTimeout(() => this.resize(), 200);
+      setTimeout(() => this.resize(), 500);
     }
   }
 
   exitMobileFullscreen() {
     const arenaBox = document.getElementById('game-arena-wrapper');
-    if (arenaBox) {
+    if (arenaBox && arenaBox.classList.contains('mobile-fullscreen')) {
       arenaBox.classList.remove('mobile-fullscreen');
+      document.documentElement.classList.remove('in-mobile-fullscreen');
+      document.body.classList.remove('in-mobile-fullscreen');
       document.body.style.overflow = '';
+      this.resize();
       setTimeout(() => this.resize(), 60);
+      setTimeout(() => this.resize(), 200);
     }
   }
 
