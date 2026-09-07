@@ -9,7 +9,30 @@ class SlimeMultiplayer {
     this.isHost = false;
     this.playerId = 'slime_' + Math.random().toString(36).substr(2, 6);
     this.otherPlayer = null;
+    this.otherPlayers = new Map(); // Support 2+ players
     this.lastBroadcast = 0;
+  }
+
+  normalizeCode(code) {
+    if (!code) return '';
+    let clean = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (clean.startsWith('SLIME') && clean.length > 5) {
+      clean = clean.substring(5);
+    }
+    return clean;
+  }
+
+  getPeerConfig() {
+    return {
+      debug: 1,
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:global.stun.twilio.com:3478' }
+        ]
+      }
+    };
   }
 
   createRoom() {
@@ -25,7 +48,8 @@ class SlimeMultiplayer {
   }
 
   joinRoom(code) {
-    this.roomCode = code.trim().toUpperCase();
+    const clean = this.normalizeCode(code);
+    this.roomCode = 'SLIME-' + clean;
     this.isHost = false;
     this.connect();
     return this.roomCode;
@@ -42,9 +66,12 @@ class SlimeMultiplayer {
     // 1. Clean previous connections
     this.disconnect();
 
+    const cleanCode = this.normalizeCode(this.roomCode);
+    if (!cleanCode) return;
+
     // 2. Setup Local BroadcastChannel (instant zero-latency sync on same machine/browser tabs)
     try {
-      this.channel = new BroadcastChannel('slimeplay_room_' + this.roomCode);
+      this.channel = new BroadcastChannel('slimeplay_v2_' + cleanCode);
       this.channel.onmessage = (e) => this.handleMessage(e.data);
       this.sendToAll({
         type: 'PLAYER_JOINED',
@@ -53,18 +80,20 @@ class SlimeMultiplayer {
         time: Date.now()
       });
     } catch (err) {
-      console.warn('BroadcastChannel not available', err);
+      console.warn('BroadcastChannel notice:', err);
     }
 
-    // 3. Setup Global Internet WebRTC via PeerJS (direct P2P across devices without custom backend)
+    // 3. Setup Global Internet WebRTC via PeerJS (works cross-device PC & Mobile with STUN)
     if (typeof Peer !== 'undefined') {
       try {
-        const sanitizedCode = this.roomCode.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const hostPeerId = 'slimeplay-room-' + sanitizedCode;
+        const hostPeerId = 'slimeplay-v2-room-' + cleanCode.toLowerCase();
 
         if (this.isHost) {
-          this.peer = new Peer(hostPeerId, {
-            debug: 0
+          this.peer = new Peer(hostPeerId, this.getPeerConfig());
+
+          this.peer.on('open', (id) => {
+            const statusEl = document.getElementById('lobby-status-text');
+            if (statusEl) statusEl.innerText = 'Room is LIVE! Waiting for friend to join with code...';
           });
 
           this.peer.on('connection', (conn) => {
@@ -76,24 +105,33 @@ class SlimeMultiplayer {
                 isHost: true
               });
             });
-            conn.on('data', (data) => this.handleMessage(data));
+            conn.on('data', (data) => {
+              this.handleMessage(data);
+              // Relay to all other connected peers for 2+ players!
+              for (let otherConn of this.peerConnections) {
+                if (otherConn !== conn && otherConn.open) {
+                  try { otherConn.send(data); } catch(e) {}
+                }
+              }
+            });
             conn.on('close', () => {
               this.peerConnections = this.peerConnections.filter(c => c !== conn);
             });
           });
 
           this.peer.on('error', (err) => {
-            // If ID already taken on cloud signaling, continue gracefully with local sync
-            console.log('PeerJS signaling notice:', err.type);
+            console.log('PeerJS host notice:', err.type);
+            const statusEl = document.getElementById('lobby-status-text');
+            if (err.type === 'unavailable-id' && statusEl) {
+              statusEl.innerText = 'Room code active! Ready for friends to connect.';
+            }
           });
         } else {
           // Joining Guest
-          this.peer = new Peer(undefined, {
-            debug: 0
-          });
+          this.peer = new Peer(undefined, this.getPeerConfig());
 
           this.peer.on('open', () => {
-            const conn = this.peer.connect(hostPeerId, { reliable: false });
+            const conn = this.peer.connect(hostPeerId, { reliable: true });
             conn.on('open', () => {
               this.peerConnections.push(conn);
               conn.send({
@@ -102,6 +140,8 @@ class SlimeMultiplayer {
                 isHost: false,
                 time: Date.now()
               });
+              const guestText = document.getElementById('guest-status-text');
+              if (guestText) guestText.innerHTML = `✅ Connected to Room! Launching with host...`;
             });
             conn.on('data', (data) => this.handleMessage(data));
             conn.on('close', () => {
@@ -111,10 +151,18 @@ class SlimeMultiplayer {
 
           this.peer.on('error', (err) => {
             console.log('PeerJS guest notice:', err.type);
+            const guestText = document.getElementById('guest-status-text');
+            if (guestText) {
+              if (err.type === 'peer-unavailable') {
+                guestText.innerHTML = `⚠️ Room <strong>${this.roomCode}</strong> not found. Check code!`;
+              } else {
+                guestText.innerHTML = `⚠️ Connecting (${err.type})...`;
+              }
+            }
           });
         }
       } catch (err) {
-        console.warn('PeerJS WebRTC initialization skipped:', err);
+        console.warn('PeerJS WebRTC notice:', err);
       }
     }
   }
@@ -142,11 +190,9 @@ class SlimeMultiplayer {
 
   disconnect() {
     if (this.channel) {
-      this.sendToAll({
-        type: 'PLAYER_LEFT',
-        id: this.playerId
-      });
-      this.channel.close();
+      try {
+        this.channel.close();
+      } catch(e) {}
       this.channel = null;
     }
 
@@ -158,6 +204,7 @@ class SlimeMultiplayer {
     }
     this.peerConnections = [];
     this.otherPlayer = null;
+    this.otherPlayers.clear();
   }
 
   broadcastState(playerSlime) {
@@ -177,7 +224,7 @@ class SlimeMultiplayer {
       mouthOpenness: playerSlime.mouthOpenness,
       squishX: playerSlime.squishX,
       squishY: playerSlime.squishY,
-      health: this.game.playerHealth,
+      health: this.game ? this.game.playerHealth : 100,
       color: playerSlime.color,
       shape: playerSlime.shape
     });
@@ -219,7 +266,7 @@ class SlimeMultiplayer {
     if (!data || data.id === this.playerId) return;
 
     if (data.type === 'PLAYER_JOINED') {
-      this.ensureOtherPlayer();
+      this.ensureOtherPlayer(data.id);
       this.sendToAll({
         type: 'PLAYER_ACK',
         id: this.playerId,
@@ -229,7 +276,7 @@ class SlimeMultiplayer {
         this.game.onSecondPlayerJoined(data);
       }
     } else if (data.type === 'PLAYER_ACK') {
-      this.ensureOtherPlayer();
+      this.ensureOtherPlayer(data.id);
       if (this.game && this.game.onGuestJoinedAck) {
         this.game.onGuestJoinedAck(data);
       }
@@ -240,28 +287,29 @@ class SlimeMultiplayer {
         this.game.startGame();
       }
     } else if (data.type === 'SYNC_STATE') {
-      this.ensureOtherPlayer();
-      if (this.otherPlayer) {
-        this.otherPlayer.x += (data.x - this.otherPlayer.x) * 0.6;
-        this.otherPlayer.y += (data.y - this.otherPlayer.y) * 0.6;
-        this.otherPlayer.vx = data.vx;
-        this.otherPlayer.vy = data.vy;
-        this.otherPlayer.facingAngle = data.facingAngle;
-        this.otherPlayer.mouthOpenness = data.mouthOpenness;
-        this.otherPlayer.squishX = data.squishX;
-        this.otherPlayer.squishY = data.squishY;
-        this.otherPlayer.health = data.health;
-        if (data.color) this.otherPlayer.color = data.color;
-        if (data.shape) this.otherPlayer.shape = data.shape;
+      this.ensureOtherPlayer(data.id, data.color, data.shape);
+      const op = this.otherPlayers.get(data.id) || this.otherPlayer;
+      if (op) {
+        op.x += (data.x - op.x) * 0.6;
+        op.y += (data.y - op.y) * 0.6;
+        op.vx = data.vx;
+        op.vy = data.vy;
+        op.facingAngle = data.facingAngle;
+        op.mouthOpenness = data.mouthOpenness;
+        op.squishX = data.squishX;
+        op.squishY = data.squishY;
+        op.health = data.health;
+        if (data.color) op.color = data.color;
+        if (data.shape) op.shape = data.shape;
 
-        // If other player's health depleted, this player wins!
-        if (data.health <= 0 && this.game && this.game.state === 'PLAYING') {
+        // ONLY trigger game over if other player's health depleted AND match has been active > 3s
+        if (typeof data.health === 'number' && data.health <= 0 && this.game && this.game.state === 'PLAYING' && this.game.survivalTime > 3.0) {
           this.game.triggerGameOverMulti(true);
         }
       }
     } else if (data.type === 'PLAYER_DIED') {
-      // The other player died! You won!
-      if (this.game && this.game.state === 'PLAYING') {
+      // The other player died! You won! Only if match has been running > 2s
+      if (this.game && this.game.state === 'PLAYING' && this.game.survivalTime > 2.0) {
         this.game.triggerGameOverMulti(true);
       }
     } else if (data.type === 'SHOOT_BUBBLE') {
@@ -270,18 +318,24 @@ class SlimeMultiplayer {
         window.soundEngine.playBubblePop();
       }
     } else if (data.type === 'PLAYER_LEFT') {
-      this.otherPlayer = null;
+      this.otherPlayers.delete(data.id);
+      if (this.otherPlayer && this.otherPlayer.id === data.id) {
+        this.otherPlayer = null;
+      }
       if (this.game && this.game.state === 'PLAYING') {
         this.game.particles.addTextPopup(this.game.slime.x, this.game.slime.y - 20, 'Friend left the game 🚪', '#f59e0b');
       }
     }
   }
 
-  ensureOtherPlayer() {
-    if (!this.otherPlayer) {
-      this.otherPlayer = {
-        x: 60,
-        y: 60,
+  ensureOtherPlayer(id = 'default', color = null, shape = null) {
+    if (!this.otherPlayers.has(id)) {
+      const colors = ['berry', 'azure', 'honey', 'amethyst', 'matcha'];
+      const chosenColor = color || colors[this.otherPlayers.size % colors.length];
+      const p = {
+        id: id,
+        x: 60 + (this.otherPlayers.size + 1) * 40,
+        y: 60 + (this.otherPlayers.size + 1) * 40,
         vx: 0,
         vy: 0,
         radius: 44,
@@ -290,63 +344,76 @@ class SlimeMultiplayer {
         squishX: 1.0,
         squishY: 1.0,
         health: 100,
-        color: this.isHost ? 'berry' : 'matcha',
-        shape: 'classic',
-        name: this.isHost ? 'Friend Slime' : 'Host Slime'
+        color: chosenColor,
+        shape: shape || 'classic',
+        name: `Player ${this.otherPlayers.size + 2}`
       };
+      this.otherPlayers.set(id, p);
+      if (!this.otherPlayer) {
+        this.otherPlayer = p;
+      }
+      if (this.game && this.game.onPlayerRosterUpdated) {
+        this.game.onPlayerRosterUpdated();
+      }
     }
   }
 
   drawOtherPlayer(ctx) {
-    if (!this.otherPlayer) return;
-    const p = this.otherPlayer;
-    const r = p.radius;
+    if (!this.otherPlayers || this.otherPlayers.size === 0) return;
 
-    if (!this.otherRenderer) {
-      this.otherRenderer = new SlimePhysics(p.x, p.y, r, p.color || (this.isHost ? 'berry' : 'matcha'), p.shape || 'classic');
+    if (!this.renderers) {
+      this.renderers = new Map();
     }
-    this.otherRenderer.x = p.x;
-    this.otherRenderer.y = p.y;
-    this.otherRenderer.vx = p.vx;
-    this.otherRenderer.vy = p.vy;
-    this.otherRenderer.facingAngle = p.facingAngle;
-    this.otherRenderer.mouthOpenness = p.mouthOpenness;
-    this.otherRenderer.squishX = p.squishX;
-    this.otherRenderer.squishY = p.squishY;
-    if (p.color) this.otherRenderer.setColor(p.color);
-    if (p.shape) this.otherRenderer.setShape(p.shape);
 
-    this.otherRenderer.draw(ctx, p.x, p.y);
+    for (let [id, p] of this.otherPlayers) {
+      let ren = this.renderers.get(id);
+      if (!ren) {
+        ren = new SlimePhysics(p.x, p.y, p.radius || 44, p.color || 'berry', p.shape || 'classic');
+        this.renderers.set(id, ren);
+      }
+      ren.x = p.x;
+      ren.y = p.y;
+      ren.vx = p.vx;
+      ren.vy = p.vy;
+      ren.facingAngle = p.facingAngle;
+      ren.mouthOpenness = p.mouthOpenness;
+      ren.squishX = p.squishX;
+      ren.squishY = p.squishY;
+      if (p.color) ren.setColor(p.color);
+      if (p.shape) ren.setShape(p.shape);
 
-    // Overhead Player Badge
-    ctx.save();
-    ctx.translate(p.x, p.y - r - 22);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.12)';
-    ctx.shadowBlur = 8;
-    ctx.beginPath();
-    ctx.roundRect(-44, -12, 88, 24, 12);
-    ctx.fill();
+      ren.draw(ctx, p.x, p.y);
 
-    ctx.fillStyle = '#d946ef';
-    ctx.font = 'bold 12px "Nunito", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('★ ' + p.name, 0, 0);
+      // Overhead Player Badge
+      ctx.save();
+      ctx.translate(p.x, p.y - (p.radius || 44) - 22);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.94)';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.16)';
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.roundRect(-48, -12, 96, 24, 12);
+      ctx.fill();
 
-    const hpW = 50;
-    ctx.fillStyle = '#e2e8f0';
-    ctx.beginPath();
-    ctx.roundRect(-hpW/2, 16, hpW, 5, 3);
-    ctx.fill();
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 12px "Outfit", "Nunito", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('★ ' + (p.name || 'Friend'), 0, 0);
 
-    const hpRatio = Math.max(0, Math.min(1, (p.health || 100) / 100));
-    ctx.fillStyle = '#ff6b81';
-    ctx.beginPath();
-    ctx.roundRect(-hpW/2, 16, hpW * hpRatio, 5, 3);
-    ctx.fill();
+      const hpW = 54;
+      ctx.fillStyle = '#e2e8f0';
+      ctx.beginPath();
+      ctx.roundRect(-hpW/2, 16, hpW, 6, 3);
+      ctx.fill();
 
-    ctx.restore();
+      const hpRatio = Math.max(0, Math.min(1, (p.health || 100) / 100));
+      ctx.fillStyle = hpRatio > 0.5 ? '#22c55e' : (hpRatio > 0.25 ? '#f59e0b' : '#ef4444');
+      ctx.beginPath();
+      ctx.roundRect(-hpW/2, 16, hpW * hpRatio, 6, 3);
+      ctx.fill();
+
+      ctx.restore();
+    }
   }
 }
 

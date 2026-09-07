@@ -40,6 +40,7 @@ class CuteSlimeGame {
     this.reviveThreshold = 50;
     this.isEmergencyReviving = false;
     this.peacefulMoveTimer = 0;
+    this.spawnInvulnerableTimer = 240; // 4s spawn shield protection
 
     // Slime Appearance Customization (Default: Matcha & Classic)
     this.selectedColor = localStorage.getItem('slimeplay_color') || 'matcha';
@@ -312,10 +313,18 @@ class CuteSlimeGame {
     });
 
     this.canvas.addEventListener('mousedown', (e) => {
+      if (e.button === 3 || e.button === 4) {
+        e.preventDefault();
+        return;
+      }
       this.mouse.isDown = true;
     });
 
-    window.addEventListener('mouseup', () => {
+    window.addEventListener('mouseup', (e) => {
+      if (e.button === 3 || e.button === 4) {
+        e.preventDefault();
+        return;
+      }
       this.mouse.isDown = false;
     });
 
@@ -781,46 +790,48 @@ class CuteSlimeGame {
     });
   }
 
-  // Triggered when second player connects to Host
+  // Triggered when second or subsequent player connects to Host
   onSecondPlayerJoined(peerData) {
-    if (this.waitingCountdown) return;
-
     if (window.soundEngine && window.soundEngine.playHealRevive) {
       window.soundEngine.playHealRevive();
     }
+    this.onPlayerRosterUpdated();
+  }
 
+  onPlayerRosterUpdated() {
     const statusEl = document.getElementById('lobby-status-text');
-    const startHostBtn = document.getElementById('start-multi-host-btn');
+    const startBtn = document.getElementById('start-multi-host-btn');
     const startText = document.getElementById('start-multi-text');
+    const rosterEl = document.getElementById('multi-connected-players');
+    const count = (this.multiplayer.otherPlayers ? this.multiplayer.otherPlayers.size : 0) + 1;
 
-    if (startHostBtn) {
-      startHostBtn.disabled = false;
-      startHostBtn.classList.remove('disabled-waiting');
+    if (rosterEl) {
+      let html = `<div class="roster-badge host">👑 You (Creator)</div>`;
+      let i = 2;
+      for (let [id, p] of this.multiplayer.otherPlayers) {
+        html += `<div class="roster-badge guest">🌱 Player ${i}</div>`;
+        i++;
+      }
+      rosterEl.innerHTML = html;
+      rosterEl.classList.remove('hidden');
     }
 
-    let count = 3;
-    const updateCountdown = () => {
-      if (statusEl) statusEl.innerHTML = `🎉 Friend Connected! Entering Arena in <strong>${count}s...</strong>`;
-      if (startText) startText.innerText = `STARTING IN ${count}...`;
-      if (count <= 0) {
-        clearInterval(this.waitingCountdown);
-        this.waitingCountdown = null;
-        this.multiplayer.signalStartGame();
-        this.configureArena('multi');
-        this.requestArenaFullscreen();
-        this.startGame();
-      }
-      count--;
-    };
+    if (statusEl) {
+      statusEl.innerHTML = `🎉 <strong>${count} Players Connected!</strong> Click start when your squad is ready:`;
+    }
 
-    updateCountdown();
-    this.waitingCountdown = setInterval(updateCountdown, 1000);
+    if (startBtn && startText) {
+      startBtn.disabled = false;
+      startBtn.classList.remove('disabled-waiting');
+      startBtn.style.background = 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)';
+      startText.innerText = `▶ START GAME NOW (${count} PLAYERS)`;
+    }
   }
 
   // Triggered when Guest receives Host acknowledgement
   onGuestJoinedAck(data) {
     const guestText = document.getElementById('guest-status-text');
-    if (guestText) guestText.innerHTML = `✅ Connected to Host! Waiting for launch...`;
+    if (guestText) guestText.innerHTML = `✅ Connected to Room! Waiting for host to launch the game...`;
   }
 
   startGame() {
@@ -884,6 +895,11 @@ class CuteSlimeGame {
     const pBtn = document.getElementById('pause-btn');
     if (pBtn) pBtn.innerHTML = '⏸️';
     this.resetState();
+
+    const arena1 = document.getElementById('game-arena-wrapper');
+    if (arena1) arena1.classList.add('hidden');
+    const hub = document.getElementById('arcade-games-hub');
+    if (hub) hub.scrollIntoView({ behavior: 'smooth' });
   }
 
   resetState() {
@@ -891,6 +907,7 @@ class CuteSlimeGame {
     this.playerHealth = this.maxHealth;
     this.isEmergencyReviving = false;
     this.peacefulMoveTimer = 0;
+    this.spawnInvulnerableTimer = 240;
     this.projectiles = [];
     this.enemies = [];
     this.score = 0;
@@ -1138,6 +1155,9 @@ class CuteSlimeGame {
     }
 
     this.survivalTime += 0.016;
+    if (this.spawnInvulnerableTimer > 0) {
+      this.spawnInvulnerableTimer--;
+    }
 
     // Movement
     let moveX = 0;
@@ -1271,6 +1291,9 @@ class CuteSlimeGame {
       const hitDist = this.slime.radius * 0.78 + enemy.radius * 0.78;
 
       if (distToPlayer < hitDist) {
+        if (this.spawnInvulnerableTimer > 0) {
+          continue;
+        }
         if (this.slime.takeHit()) {
           const dmg = 2; // -2 HP when colliding with an enemy
           this.playerHealth = Math.max(0, this.playerHealth - dmg);
@@ -1430,12 +1453,13 @@ class CuteSlimeGame {
       mCtx.fill();
     }
 
-    if (this.multiplayer && this.multiplayer.otherPlayer) {
-      const op = this.multiplayer.otherPlayer;
-      mCtx.fillStyle = '#ff6b81';
-      mCtx.beginPath();
-      mCtx.arc(toMapX(op.x), toMapY(op.y), 4.5, 0, Math.PI * 2);
-      mCtx.fill();
+    if (this.multiplayer && this.multiplayer.otherPlayers && this.multiplayer.otherPlayers.size > 0) {
+      for (let [id, op] of this.multiplayer.otherPlayers) {
+        mCtx.fillStyle = op.color === 'berry' ? '#ec4899' : (op.color === 'azure' ? '#38bdf8' : (op.color === 'honey' ? '#f59e0b' : '#a855f7'));
+        mCtx.beginPath();
+        mCtx.arc(toMapX(op.x), toMapY(op.y), 4.5, 0, Math.PI * 2);
+        mCtx.fill();
+      }
     }
 
     mCtx.fillStyle = '#58c930';
@@ -1484,6 +1508,22 @@ class CuteSlimeGame {
     // 7. Local Slime Player
     if (this.state !== 'GAMEOVER') {
       this.slime.draw(ctx, this.mouse.worldX, this.mouse.worldY);
+
+      // Spawn Shield Aura
+      if (this.spawnInvulnerableTimer > 0) {
+        ctx.save();
+        const pulse = 1 + Math.sin(this.survivalTime * 12) * 0.08;
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 3;
+        ctx.fillStyle = 'rgba(251, 191, 36, 0.2)';
+        ctx.shadowColor = '#f59e0b';
+        ctx.shadowBlur = 16;
+        ctx.beginPath();
+        ctx.arc(this.slime.x, this.slime.y, (this.slime.radius + 14) * pulse, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
     }
 
     // 8. Particles & popups
