@@ -63,7 +63,7 @@
       </p>
 
       <div class="hero-actions">
-        <a href="#arena-section" id="hero-play-btn" class="hero-btn primary">
+        <a href="#arcade-games-hub" id="hero-play-btn" class="hero-btn primary">
           <span>Start Playing</span>
           <span>➔</span>
         </a>
@@ -953,6 +953,26 @@
       const arena2 = document.getElementById('game-arena-wrapper-2');
       const game1HubBtn = document.getElementById('game-1-hub-btn');
 
+      // Unified global scroll & view restoration helper
+      window.restoreFullWebpageScroll = function() {
+        document.documentElement.classList.remove('in-mobile-fullscreen');
+        document.body.classList.remove('in-mobile-fullscreen');
+        document.documentElement.style.overflow = '';
+        document.body.style.overflow = '';
+        document.documentElement.style.position = '';
+        document.body.style.position = '';
+        document.documentElement.style.height = '';
+        document.body.style.height = '';
+        document.body.style.touchAction = '';
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => { });
+        }
+        const a1 = document.getElementById('game-arena-wrapper');
+        const a2 = document.getElementById('game-arena-wrapper-2');
+        if (a1) a1.classList.remove('mobile-fullscreen');
+        if (a2) a2.classList.remove('mobile-fullscreen');
+      };
+
       if (launchGame1Btn && arena1 && arena2) {
         launchGame1Btn.addEventListener('click', () => {
           try { history.pushState({ arena: 1 }, '', '#game-garden'); } catch (e) { }
@@ -973,7 +993,9 @@
           arena2.classList.remove('hidden');
           arena2.scrollIntoView({ behavior: 'smooth' });
           if (window.militiaGame) {
-            window.militiaGame.enterMobileFullscreen();
+            if (window.militiaGame.isMobileDevice && window.militiaGame.isMobileDevice()) {
+              window.militiaGame.enterMobileFullscreen();
+            }
             window.militiaGame.resize();
           }
         });
@@ -982,11 +1004,11 @@
       if (game1HubBtn && arena1) {
         game1HubBtn.addEventListener('click', () => {
           arena1.classList.add('hidden');
+          window.restoreFullWebpageScroll();
           if (window.slimeGame) {
-            window.slimeGame.exitMobileFullscreen();
             window.slimeGame.goToHome();
           }
-          const hub = document.getElementById('arcade-games-hub');
+          const hub = document.getElementById('arcade-games-hub') || document.getElementById('arena-section');
           if (hub) hub.scrollIntoView({ behavior: 'smooth' });
         });
       }
@@ -1008,21 +1030,14 @@
 
       // Popstate safe handler (Gracefully brings user back to games hub on browser back button)
       window.addEventListener('popstate', (e) => {
+        window.restoreFullWebpageScroll();
         if (window.slimeGame) {
-          window.slimeGame.exitMobileFullscreen();
           window.slimeGame.goToHome();
         }
         if (window.militiaGame) {
-          window.militiaGame.exitMobileFullscreen();
           window.militiaGame.exitToHub();
         }
-        if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => { });
-        }
-        document.documentElement.classList.remove('in-mobile-fullscreen');
-        document.body.classList.remove('in-mobile-fullscreen');
-        document.body.style.overflow = '';
-        const hub = document.getElementById('arcade-games-hub');
+        const hub = document.getElementById('arcade-games-hub') || document.getElementById('arena-section');
         if (hub) {
           hub.classList.remove('hidden');
           hub.scrollIntoView({ behavior: 'smooth' });

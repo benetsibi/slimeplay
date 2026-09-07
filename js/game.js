@@ -306,19 +306,36 @@ class CuteSlimeGame {
       if (e.code === 'Space') this.keys.shoot = false;
     });
 
-    this.canvas.addEventListener('mousemove', (e) => {
+    const updateMouseCoords = (e) => {
+      if (!this.canvas) return;
       const rect = this.canvas.getBoundingClientRect();
       this.mouse.screenX = e.clientX - rect.left;
       this.mouse.screenY = e.clientY - rect.top;
-    });
+      this.mouse.worldX = this.mouse.screenX - this.canvas.width / 2 + this.camera.x;
+      this.mouse.worldY = this.mouse.screenY - this.canvas.height / 2 + this.camera.y;
+    };
 
-    this.canvas.addEventListener('mousedown', (e) => {
-      if (e.button === 3 || e.button === 4) {
-        e.preventDefault();
-        return;
-      }
-      this.mouse.isDown = true;
-    });
+    window.addEventListener('mousemove', updateMouseCoords);
+
+    // Reliable shooting on arena click: catches clicks anywhere inside the arena
+    if (arenaWrapper) {
+      arenaWrapper.addEventListener('mousedown', (e) => {
+        if (e.target.closest('button') || e.target.closest('input') || e.target.closest('a') || e.target.closest('.modal-overlay')) {
+          return;
+        }
+        if (e.button === 3 || e.button === 4) {
+          e.preventDefault();
+          return;
+        }
+        if (e.button === 0) {
+          this.mouse.isDown = true;
+          updateMouseCoords(e);
+          if (this.state === 'PLAYING') {
+            this.shootBubble();
+          }
+        }
+      });
+    }
 
     window.addEventListener('mouseup', (e) => {
       if (e.button === 3 || e.button === 4) {
@@ -389,16 +406,13 @@ class CuteSlimeGame {
       });
     }
 
-    // Hero Play Now CTA Button
+    // Hero Play Now CTA Button: Smoothly scrolls to the Dual Arcade Selection Hub without auto-starting
     const heroPlayNowBtn = document.getElementById('hero-play-btn');
     if (heroPlayNowBtn) {
       heroPlayNowBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        const arenaSec = document.getElementById('arena-section');
-        if (arenaSec) arenaSec.scrollIntoView({ behavior: 'smooth' });
-        this.configureArena('single');
-        this.requestArenaFullscreen();
-        this.startGame();
+        const hub = document.getElementById('arcade-games-hub') || document.getElementById('arena-section');
+        if (hub) hub.scrollIntoView({ behavior: 'smooth' });
       });
     }
 
@@ -660,15 +674,21 @@ class CuteSlimeGame {
 
   exitMobileFullscreen() {
     const arenaBox = document.getElementById('game-arena-wrapper');
-    if (arenaBox && arenaBox.classList.contains('mobile-fullscreen')) {
+    if (arenaBox) {
       arenaBox.classList.remove('mobile-fullscreen');
-      document.documentElement.classList.remove('in-mobile-fullscreen');
-      document.body.classList.remove('in-mobile-fullscreen');
-      document.body.style.overflow = '';
-      this.resize();
-      setTimeout(() => this.resize(), 60);
-      setTimeout(() => this.resize(), 200);
     }
+    document.documentElement.classList.remove('in-mobile-fullscreen');
+    document.body.classList.remove('in-mobile-fullscreen');
+    document.documentElement.style.overflow = '';
+    document.body.style.overflow = '';
+    document.documentElement.style.position = '';
+    document.body.style.position = '';
+    document.documentElement.style.height = '';
+    document.body.style.height = '';
+    document.body.style.touchAction = '';
+    this.resize();
+    setTimeout(() => this.resize(), 60);
+    setTimeout(() => this.resize(), 200);
   }
 
   initTouchControls() {
@@ -889,6 +909,16 @@ class CuteSlimeGame {
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => {});
     }
+    document.documentElement.classList.remove('in-mobile-fullscreen');
+    document.body.classList.remove('in-mobile-fullscreen');
+    document.documentElement.style.overflow = '';
+    document.body.style.overflow = '';
+    document.documentElement.style.position = '';
+    document.body.style.position = '';
+    document.documentElement.style.height = '';
+    document.body.style.height = '';
+    document.body.style.touchAction = '';
+
     document.getElementById('pause-modal').classList.add('hidden');
     document.getElementById('game-over-modal').classList.add('hidden');
     document.getElementById('start-modal').classList.remove('hidden');
@@ -898,8 +928,16 @@ class CuteSlimeGame {
 
     const arena1 = document.getElementById('game-arena-wrapper');
     if (arena1) arena1.classList.add('hidden');
-    const hub = document.getElementById('arcade-games-hub');
-    if (hub) hub.scrollIntoView({ behavior: 'smooth' });
+    const arena2 = document.getElementById('game-arena-wrapper-2');
+    if (arena2) arena2.classList.add('hidden');
+
+    const hub = document.getElementById('arcade-games-hub') || document.getElementById('arena-section');
+    if (hub) {
+      hub.classList.remove('hidden');
+      setTimeout(() => {
+        hub.scrollIntoView({ behavior: 'smooth' });
+      }, 50);
+    }
   }
 
   resetState() {
@@ -917,6 +955,9 @@ class CuteSlimeGame {
     this.survivalTime = 0;
     this.spawnTimer = 0;
     this.spawnInterval = this.gameMode === 'multi' ? 140 : 180;
+    this.keys = { up: false, down: false, left: false, right: false, shoot: false };
+    this.mouse.isDown = false;
+    this.shootCooldown = 0;
 
     const titleEl = document.getElementById('game-over-title');
     const subEl = document.getElementById('game-over-subtitle');
@@ -1029,12 +1070,12 @@ class CuteSlimeGame {
     this.shootCooldown = 18;
 
     let aimAngle;
-    if (this.joystick.active && (this.joystick.vx !== 0 || this.joystick.vy !== 0)) {
+    if (this.joystick && this.joystick.active && (this.joystick.vx !== 0 || this.joystick.vy !== 0)) {
       aimAngle = Math.atan2(this.joystick.vy, this.joystick.vx);
-    } else if (this.isMobileDevice()) {
-      aimAngle = this.slime.facingAngle || 0;
-    } else {
+    } else if (this.mouse && this.mouse.worldX !== undefined && !isNaN(this.mouse.worldX) && (this.mouse.screenX !== undefined)) {
       aimAngle = Math.atan2(this.mouse.worldY - this.slime.y, this.mouse.worldX - this.slime.x);
+    } else {
+      aimAngle = this.slime.facingAngle || 0;
     }
 
     const mouthDist = this.slime.radius + 8;

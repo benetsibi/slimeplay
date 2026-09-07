@@ -675,13 +675,22 @@ class SlimeMilitiaGame {
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') this.keys.jetpack = false;
     });
 
-    if (this.canvas) {
-      this.canvas.addEventListener('mousemove', (e) => {
-        const rect = this.canvas.getBoundingClientRect();
-        this.mouse.screenX = e.clientX - rect.left;
-        this.mouse.screenY = e.clientY - rect.top;
-      });
-      this.canvas.addEventListener('mousedown', (e) => {
+    const updateMilitiaMouse = (e) => {
+      if (!this.canvas) return;
+      const rect = this.canvas.getBoundingClientRect();
+      this.mouse.screenX = e.clientX - rect.left;
+      this.mouse.screenY = e.clientY - rect.top;
+      this.mouse.worldX = this.mouse.screenX - this.canvas.width / 2 + this.camera.x;
+      this.mouse.worldY = this.mouse.screenY - this.canvas.height / 2 + this.camera.y;
+    };
+
+    window.addEventListener('mousemove', updateMilitiaMouse);
+
+    if (wrapper) {
+      wrapper.addEventListener('mousedown', (e) => {
+        if (e.target.closest('button') || e.target.closest('input') || e.target.closest('a') || e.target.closest('.modal-overlay')) {
+          return;
+        }
         if (e.button === 3 || e.button === 4) {
           e.preventDefault();
           return;
@@ -689,19 +698,26 @@ class SlimeMilitiaGame {
         if (e.button === 2) {
           e.preventDefault();
           this.throwGrenade();
-        } else {
+        } else if (e.button === 0) {
           this.mouse.isDown = true;
+          updateMilitiaMouse(e);
+          if (this.state === 'PLAYING') {
+            this.shootBubble();
+          }
         }
       });
-      this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-      window.addEventListener('mouseup', (e) => {
-        if (e.button === 3 || e.button === 4) {
-          e.preventDefault();
-          return;
-        }
-        this.mouse.isDown = false;
+      wrapper.addEventListener('contextmenu', (e) => {
+        if (!e.target.closest('input')) e.preventDefault();
       });
     }
+
+    window.addEventListener('mouseup', (e) => {
+      if (e.button === 3 || e.button === 4) {
+        e.preventDefault();
+        return;
+      }
+      this.mouse.isDown = false;
+    });
 
     this.initMilitiaTouchControls();
 
@@ -896,7 +912,14 @@ class SlimeMilitiaGame {
     }
   }
 
+  isMobileDevice() {
+    const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isSmall = window.innerWidth <= 768;
+    return isMobileUA || isSmall;
+  }
+
   enterMobileFullscreen() {
+    if (!this.isMobileDevice()) return;
     const wrapper = document.getElementById('game-arena-wrapper-2');
     if (wrapper && !wrapper.classList.contains('mobile-fullscreen')) {
       wrapper.classList.add('mobile-fullscreen');
@@ -912,24 +935,53 @@ class SlimeMilitiaGame {
     const wrapper = document.getElementById('game-arena-wrapper-2');
     if (wrapper) {
       wrapper.classList.remove('mobile-fullscreen');
-      document.documentElement.classList.remove('in-mobile-fullscreen');
-      document.body.classList.remove('in-mobile-fullscreen');
-      this.resize();
     }
+    document.documentElement.classList.remove('in-mobile-fullscreen');
+    document.body.classList.remove('in-mobile-fullscreen');
+    document.documentElement.style.overflow = '';
+    document.body.style.overflow = '';
+    document.documentElement.style.position = '';
+    document.body.style.position = '';
+    document.documentElement.style.height = '';
+    document.body.style.height = '';
+    document.body.style.touchAction = '';
+    this.resize();
   }
 
   exitToHub() {
     this.state = 'LOBBY';
     if (this.timerInterval) clearInterval(this.timerInterval);
     this.exitMobileFullscreen();
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
+    document.documentElement.classList.remove('in-mobile-fullscreen');
+    document.body.classList.remove('in-mobile-fullscreen');
+    document.documentElement.style.overflow = '';
+    document.body.style.overflow = '';
+    document.documentElement.style.position = '';
+    document.body.style.position = '';
+    document.documentElement.style.height = '';
+    document.body.style.height = '';
+    document.body.style.touchAction = '';
+
     document.getElementById('militia-gameover-modal').classList.add('hidden');
     document.getElementById('militia-start-modal').classList.remove('hidden');
+
+    this.keys = { up: false, down: false, left: false, right: false, shoot: false, grenade: false, jetpack: false };
+    this.mouse.isDown = false;
+    this.shootCooldown = 0;
 
     const wrapper2 = document.getElementById('game-arena-wrapper-2');
     if (wrapper2) wrapper2.classList.add('hidden');
 
-    const hub = document.getElementById('arcade-games-hub');
-    if (hub) hub.scrollIntoView({ behavior: 'smooth' });
+    const hub = document.getElementById('arcade-games-hub') || document.getElementById('arena-section');
+    if (hub) {
+      hub.classList.remove('hidden');
+      setTimeout(() => {
+        hub.scrollIntoView({ behavior: 'smooth' });
+      }, 50);
+    }
   }
 
   startMatchFromNetwork(duration = 300) {
@@ -979,10 +1031,12 @@ class SlimeMilitiaGame {
     this.grenadeCooldown = 40;
 
     let aimAngle;
-    if (this.joystick.active && (this.joystick.vx !== 0 || this.joystick.vy !== 0)) {
+    if (this.joystick && this.joystick.active && (this.joystick.vx !== 0 || this.joystick.vy !== 0)) {
       aimAngle = Math.atan2(this.joystick.vy, this.joystick.vx);
-    } else {
+    } else if (this.mouse && this.mouse.worldX !== undefined && !isNaN(this.mouse.worldX)) {
       aimAngle = Math.atan2(this.mouse.worldY - this.slime.y, this.mouse.worldX - this.slime.x);
+    } else {
+      aimAngle = this.slime.facingAngle || 0;
     }
 
     const speed = 11.5;
@@ -1000,10 +1054,12 @@ class SlimeMilitiaGame {
     this.shootCooldown = 13;
 
     let aimAngle;
-    if (this.joystick.active && (this.joystick.vx !== 0 || this.joystick.vy !== 0)) {
+    if (this.joystick && this.joystick.active && (this.joystick.vx !== 0 || this.joystick.vy !== 0)) {
       aimAngle = Math.atan2(this.joystick.vy, this.joystick.vx);
-    } else {
+    } else if (this.mouse && this.mouse.worldX !== undefined && !isNaN(this.mouse.worldX)) {
       aimAngle = Math.atan2(this.mouse.worldY - this.slime.y, this.mouse.worldX - this.slime.x);
+    } else {
+      aimAngle = this.slime.facingAngle || 0;
     }
 
     const px = this.slime.x + Math.cos(aimAngle) * 44;
