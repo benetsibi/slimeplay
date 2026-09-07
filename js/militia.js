@@ -158,8 +158,27 @@ class MilitiaMultiplayer {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:global.stun.twilio.com:3478' }
-        ]
+          { urls: 'stun:stun2.l.google.com:19302' },
+          { urls: 'stun:stun.cloudflare.com:3478' },
+          { urls: 'stun:global.stun.twilio.com:3478' },
+          // Free Global TURN Relay for cellular networks & symmetric NATs (Jio, Airtel, Vi, Hotspot)
+          {
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelay',
+            credential: 'openrelay'
+          },
+          {
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelay',
+            credential: 'openrelay'
+          },
+          {
+            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+            username: 'openrelay',
+            credential: 'openrelay'
+          }
+        ],
+        iceCandidatePoolSize: 10
       }
     };
   }
@@ -210,7 +229,7 @@ class MilitiaMultiplayer {
       });
     } catch (err) {}
 
-    // 2. PeerJS WebRTC for global cross-device multiplayer
+    // 2. PeerJS WebRTC for global cross-device multiplayer (works across different networks, cellular & Wi-Fi)
     if (typeof Peer !== 'undefined') {
       try {
         const hostPeerId = 'slimeplay-v2-militia-' + cleanCode.toLowerCase();
@@ -249,12 +268,28 @@ class MilitiaMultiplayer {
 
           this.peer.on('error', (err) => {
             console.log('Militia peer host error:', err.type);
+            const statusEl = document.getElementById('militia-host-status-text');
+            if (err.type === 'unavailable-id' && statusEl) {
+              statusEl.innerText = 'Battle room active! Ready for squad to connect.';
+            }
           });
         } else {
           this.peer = new Peer(undefined, this.getPeerConfig());
           this.peer.on('open', () => {
+            const guestStatus = document.getElementById('militia-guest-status-text');
+            if (guestStatus) guestStatus.innerHTML = `📡 Connecting to Host across network...`;
+
             const conn = this.peer.connect(hostPeerId, { reliable: true });
+
+            // Watchdog timer: if not open after 6 seconds, inform connecting via global relay
+            const connectTimeout = setTimeout(() => {
+              if (conn && !conn.open && guestStatus) {
+                guestStatus.innerHTML = `🔄 Connecting via Global TURN Relay...`;
+              }
+            }, 6000);
+
             conn.on('open', () => {
+              clearTimeout(connectTimeout);
               this.peerConnections.push(conn);
               conn.send({
                 type: 'MILITIA_JOIN',
@@ -263,11 +298,11 @@ class MilitiaMultiplayer {
                 color: this.game ? this.game.selectedColor : 'azure',
                 shape: this.game ? this.game.selectedShape : 'classic'
               });
-              const guestStatus = document.getElementById('militia-guest-status-text');
               if (guestStatus) guestStatus.innerHTML = `✅ Connected to Squad! Waiting for host to deploy battle...`;
             });
             conn.on('data', (data) => this.handleMessage(data));
             conn.on('close', () => {
+              clearTimeout(connectTimeout);
               this.peerConnections = this.peerConnections.filter(c => c !== conn);
             });
           });
@@ -276,7 +311,7 @@ class MilitiaMultiplayer {
             const guestStatus = document.getElementById('militia-guest-status-text');
             if (guestStatus) {
               if (err.type === 'peer-unavailable') {
-                guestStatus.innerHTML = `⚠️ Battle Room not found. Check code!`;
+                guestStatus.innerHTML = `⚠️ Battle Room not found. Make sure host created it!`;
               } else {
                 guestStatus.innerHTML = `⚠️ Connecting (${err.type})...`;
               }

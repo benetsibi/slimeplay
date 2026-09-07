@@ -29,8 +29,27 @@ class SlimeMultiplayer {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:global.stun.twilio.com:3478' }
-        ]
+          { urls: 'stun:stun2.l.google.com:19302' },
+          { urls: 'stun:stun.cloudflare.com:3478' },
+          { urls: 'stun:global.stun.twilio.com:3478' },
+          // Free Global TURN Relay for cellular networks & symmetric NATs (Jio, Airtel, Vi, Hotspot)
+          {
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelay',
+            credential: 'openrelay'
+          },
+          {
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelay',
+            credential: 'openrelay'
+          },
+          {
+            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+            username: 'openrelay',
+            credential: 'openrelay'
+          }
+        ],
+        iceCandidatePoolSize: 10
       }
     };
   }
@@ -83,7 +102,7 @@ class SlimeMultiplayer {
       console.warn('BroadcastChannel notice:', err);
     }
 
-    // 3. Setup Global Internet WebRTC via PeerJS (works cross-device PC & Mobile with STUN)
+    // 3. Setup Global Internet WebRTC via PeerJS (works across different networks, cellular & Wi-Fi)
     if (typeof Peer !== 'undefined') {
       try {
         const hostPeerId = 'slimeplay-v2-room-' + cleanCode.toLowerCase();
@@ -93,7 +112,7 @@ class SlimeMultiplayer {
 
           this.peer.on('open', (id) => {
             const statusEl = document.getElementById('lobby-status-text');
-            if (statusEl) statusEl.innerText = 'Room is LIVE! Waiting for friend to join with code...';
+            if (statusEl) statusEl.innerText = 'Room is LIVE! Waiting for friends to join with code...';
           });
 
           this.peer.on('connection', (conn) => {
@@ -131,8 +150,20 @@ class SlimeMultiplayer {
           this.peer = new Peer(undefined, this.getPeerConfig());
 
           this.peer.on('open', () => {
+            const guestText = document.getElementById('guest-status-text');
+            if (guestText) guestText.innerHTML = `📡 Connecting to Host across network...`;
+
             const conn = this.peer.connect(hostPeerId, { reliable: true });
+
+            // Watchdog timer: If not open after 6 seconds, notify connecting via relay
+            const connectTimeout = setTimeout(() => {
+              if (conn && !conn.open && guestText) {
+                guestText.innerHTML = `🔄 Connecting via Global TURN Relay...`;
+              }
+            }, 6000);
+
             conn.on('open', () => {
+              clearTimeout(connectTimeout);
               this.peerConnections.push(conn);
               conn.send({
                 type: 'PLAYER_JOINED',
@@ -140,11 +171,11 @@ class SlimeMultiplayer {
                 isHost: false,
                 time: Date.now()
               });
-              const guestText = document.getElementById('guest-status-text');
               if (guestText) guestText.innerHTML = `✅ Connected to Room! Launching with host...`;
             });
             conn.on('data', (data) => this.handleMessage(data));
             conn.on('close', () => {
+              clearTimeout(connectTimeout);
               this.peerConnections = this.peerConnections.filter(c => c !== conn);
             });
           });
@@ -154,7 +185,7 @@ class SlimeMultiplayer {
             const guestText = document.getElementById('guest-status-text');
             if (guestText) {
               if (err.type === 'peer-unavailable') {
-                guestText.innerHTML = `⚠️ Room <strong>${this.roomCode}</strong> not found. Check code!`;
+                guestText.innerHTML = `⚠️ Room <strong>${this.roomCode}</strong> not found. Make sure host created it!`;
               } else {
                 guestText.innerHTML = `⚠️ Connecting (${err.type})...`;
               }

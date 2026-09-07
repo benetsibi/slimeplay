@@ -115,7 +115,8 @@
       <span class="section-subtitle">Arcade Selection Hub</span>
       <h2 class="section-title">Select Your Slime Arena</h2>
       <p style="color: var(--text-muted); font-size: 1rem; max-width: 620px; margin: 8px auto 0 auto;">
-        Two completely different games! Choose between our gentle tabletop garden or enter high-stakes Mini Militia combat!
+        Two completely different games! Choose between our gentle tabletop garden or enter high-stakes Mini Militia
+        combat!
       </p>
     </div>
 
@@ -133,7 +134,8 @@
         <div class="game-card-body">
           <h3 class="game-card-title">SlimePlay: Cozy Garden</h3>
           <p class="game-card-desc">
-            Explore the honey-oak tabletop realm! Pop gentle critters, customize 5 colors & 4 cute shapes, survive enemy encounters, and regenerate +10 HP with peaceful movement.
+            Explore the honey-oak tabletop realm! Pop gentle critters, customize 5 colors & 4 cute shapes, survive enemy
+            encounters, and regenerate +10 HP with peaceful movement.
           </p>
           <div class="game-card-chips">
             <span class="game-chip">🌱 Single / 2P Duel</span>
@@ -158,7 +160,8 @@
         <div class="game-card-body">
           <h3 class="game-card-title">Slime Militia: Battleground</h3>
           <p class="game-card-desc">
-            Mini Militia style 2+ player combat! Multi-level platforms, brick bunkers, camouflage bushes to hide in, bouncy grenades, jetpack nitro flying, and a 5-minute countdown clock!
+            Mini Militia style 2+ player combat! Multi-level platforms, brick bunkers, camouflage bushes to hide in,
+            bouncy grenades, jetpack nitro flying, and a 5-minute countdown clock!
           </p>
           <div class="game-card-chips">
             <span class="game-chip">⏱️ 5-Minute Timer</span>
@@ -183,13 +186,11 @@
       </button>
 
       <!-- Mobile Exit Fullscreen Button (Active only in mobile-fullscreen) -->
-      <button id="mobile-exit-fs-btn" class="mobile-exit-fs-btn" type="button" title="Exit Fullscreen">
-        ⤓ Exit Fullscreen
-      </button>
-
-      <!-- Back to Games Hub Button for Game 1 -->
-      <button id="game-1-hub-btn" class="arena-hub-back-btn" type="button" title="Back to Games Hub">
-        ⤓ Back to Games Hub
+      <button id="mobile-exit-fs-btn" class="arena-nav-hub-btn mobile-fs-exit" type="button"
+        title="Exit Fullscreen to Hub">
+        <span class="hub-nav-arrow">‹</span>
+        <span class="hub-nav-icon">🎮</span>
+        <span class="hub-nav-label">ARCADE HUB</span>
       </button>
 
       <!-- Green Theme Revive Vignette & Revive Alert Banner -->
@@ -210,6 +211,13 @@
       <div class="ui-layer">
         <!-- Top HUD -->
         <div class="hud-top">
+          <!-- Sleek Floating Arcade Hub Navigation Button for Game 1 -->
+          <button id="game-1-hub-btn" class="arena-nav-hub-btn" type="button" title="Return to Arcade Games Hub">
+            <span class="hub-nav-arrow">‹</span>
+            <span class="hub-nav-icon">🎮</span>
+            <span class="hub-nav-label">ARCADE HUB</span>
+          </button>
+
           <div class="hud-panel">
             <div class="stat-group">
               <span class="stat-label">Score</span>
@@ -353,6 +361,12 @@
               <button id="join-room-btn" class="secondary-btn" style="font-size: 0.9rem;">JOIN ➔</button>
             </div>
 
+            <!-- Global Cellular & Outside Wi-Fi Network Badge -->
+            <div class="network-relay-badge">
+              <span class="relay-pulse-dot"></span>
+              <span>Global Cellular & Outside Wi-Fi Supported</span>
+            </div>
+
             <div id="guest-join-status" class="guest-join-status hidden">
               <span class="lobby-spinner">🔄</span>
               <span id="guest-status-text">Connecting to Host...</span>
@@ -372,6 +386,8 @@
               Copy Share Link 📋
             </button>
 
+
+
             <!-- Waiting status banner -->
             <div id="multi-lobby-status" class="lobby-waiting-status">
               <span class="lobby-spinner">📡</span>
@@ -379,7 +395,8 @@
             </div>
 
             <!-- Connected Players in Lobby (2+ Support) -->
-            <div id="multi-connected-players" class="multi-connected-players hidden" style="margin: 10px 0; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;">
+            <div id="multi-connected-players" class="multi-connected-players hidden"
+              style="margin: 10px 0; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;">
               <div class="roster-badge host">👑 You (Creator)</div>
             </div>
 
@@ -490,7 +507,8 @@
       <div id="game-over-modal" class="modal-overlay hidden">
         <div class="glass-card">
           <h2 id="game-over-title" class="game-title" style="color: #ea580c;">SQUISHED! (｡•́︿•̀｡)</h2>
-          <p id="game-over-subtitle" class="game-subtitle">All 100 health points were depleted! Your cute jelly body became a pancake puddle.
+          <p id="game-over-subtitle" class="game-subtitle">All 100 health points were depleted! Your cute jelly body
+            became a pancake puddle.
           </p>
 
           <div class="game-over-stats">
@@ -529,15 +547,18 @@
         <span>📱</span> Tap to Open Fullscreen Arena ⤢
       </button>
 
-      <!-- Exit Fullscreen / Back to Hub Button -->
-      <button id="militia-exit-fs-btn" class="mobile-exit-fs-btn" type="button" title="Exit to Hub">
-        ⤓ Back to Games Hub
-      </button>
-
       <!-- In-Game Tactical HUD -->
       <div class="militia-ui-layer">
         <!-- Top Tactical HUD -->
         <div class="militia-hud-top">
+          <!-- Sleek Floating Arcade Hub Navigation Button for Game 2 (Slime Militia) -->
+          <button id="militia-exit-fs-btn" class="arena-nav-hub-btn militia-theme" type="button"
+            title="Exit to Arcade Games Hub">
+            <span class="hub-nav-arrow">‹</span>
+            <span class="hub-nav-icon">⚔️</span>
+            <span class="hub-nav-label">ARCADE HUB</span>
+          </button>
+
           <!-- 5-Minute Digital Countdown Clock -->
           <div class="militia-clock-badge">
             <span class="clock-label">MATCH TIMER</span>
@@ -622,7 +643,14 @@
         <div class="glass-card militia-card" style="max-width: 520px;">
           <span class="militia-card-tag">⚔️ MULTIPLAYER SQUAD BATTLEGROUND</span>
           <h2 class="game-title" style="color: #ea580c;">SLIME MILITIA</h2>
-          <p class="game-subtitle">Pure PvP multiplayer! Battle real friends with bouncy grenades, stealth bushes & jetpack nitro. No bots!</p>
+          <p class="game-subtitle">Pure PvP multiplayer! Battle real friends with bouncy grenades, stealth bushes &
+            jetpack nitro. No bots!</p>
+
+          <!-- Global Cellular & Outside Wi-Fi Network Badge -->
+          <div class="network-relay-badge militia-relay">
+            <span class="relay-pulse-dot orange"></span>
+            <span>Global Cellular & Outside Wi-Fi Supported (TURN Relay Active)</span>
+          </div>
 
           <!-- Mode Tabs: Host Battle vs Join Battle -->
           <div class="mode-tabs-grid" style="margin-bottom: 14px;">
@@ -640,31 +668,39 @@
 
           <!-- Section A: Host Battle (Create Room) -->
           <div id="militia-create-box">
-            <button id="militia-gen-room-btn" class="glow-btn" style="width: 100%; background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);">
+            <button id="militia-gen-room-btn" class="glow-btn"
+              style="width: 100%; background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);">
               <span>CREATE BATTLE ROOM</span>
               <span>🔥</span>
             </button>
 
             <!-- Room Created Active Lobby Box -->
             <div id="militia-room-created-box" class="hidden" style="margin-top: 14px;">
-              <div style="font-size: 0.85rem; color: #cbd5e1; font-weight: 700;">Share this room code with your friends:</div>
-              <div id="militia-display-room-code" style="font-family: var(--font-display); font-size: 2.1rem; font-weight: 900; color: #fb923c; letter-spacing: 2px;">MILITIA-XXXX</div>
-              
-              <button id="militia-copy-link-btn" class="secondary-btn" style="width: 100%; font-size: 0.88rem; margin: 8px 0; background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); color: #fff;">
+              <div style="font-size: 0.85rem; color: #cbd5e1; font-weight: 700;">Share this room code with your friends:
+              </div>
+              <div id="militia-display-room-code"
+                style="font-family: var(--font-display); font-size: 2.1rem; font-weight: 900; color: #fb923c; letter-spacing: 2px;">
+                MILITIA-XXXX</div>
+
+              <button id="militia-copy-link-btn" class="secondary-btn"
+                style="width: 100%; font-size: 0.88rem; margin: 8px 0; background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); color: #fff;">
                 Copy Invite Link 📋
               </button>
 
-              <div id="militia-host-status" class="lobby-waiting-status" style="background: rgba(249, 115, 22, 0.15); border-color: rgba(249, 115, 22, 0.35); color: #fed7aa;">
+              <div id="militia-host-status" class="lobby-waiting-status"
+                style="background: rgba(249, 115, 22, 0.15); border-color: rgba(249, 115, 22, 0.35); color: #fed7aa;">
                 <span class="lobby-spinner">📡</span>
                 <span id="militia-host-status-text">Room is LIVE! Waiting for friends to join...</span>
               </div>
 
               <!-- Connected Squad Members List -->
-              <div id="militia-squad-roster" class="multi-connected-players" style="margin: 10px 0; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;">
+              <div id="militia-squad-roster" class="multi-connected-players"
+                style="margin: 10px 0; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;">
                 <div class="roster-badge host" style="background: #ea580c; color: #fff;">👑 You (Host)</div>
               </div>
 
-              <button id="militia-start-match-btn" class="glow-btn disabled-waiting" disabled style="width: 100%; margin-top: 10px; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);">
+              <button id="militia-start-match-btn" class="glow-btn disabled-waiting" disabled
+                style="width: 100%; margin-top: 10px; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);">
                 <span id="militia-start-btn-text">WAITING FOR FRIENDS TO JOIN...</span>
               </button>
             </div>
@@ -672,12 +708,16 @@
 
           <!-- Section B: Join Battle (Enter Room Code) -->
           <div id="militia-join-box" class="hidden">
-            <div style="font-size: 0.85rem; color: #cbd5e1; font-weight: 700; margin-bottom: 6px;">Enter Friend's Battle Room Code:</div>
+            <div style="font-size: 0.85rem; color: #cbd5e1; font-weight: 700; margin-bottom: 6px;">Enter Friend's Battle
+              Room Code:</div>
             <div class="multi-input-row">
-              <input type="text" id="militia-join-input" class="text-input" placeholder="MILITIA-XXXX" maxlength="14" style="background: rgba(0,0,0,0.4); border-color: rgba(255,255,255,0.25); color: #fff;">
-              <button id="militia-join-btn" class="secondary-btn" style="font-size: 0.9rem; background: #f97316; color: #fff; border: none;">JOIN ➔</button>
+              <input type="text" id="militia-join-input" class="text-input" placeholder="MILITIA-XXXX" maxlength="14"
+                style="background: rgba(0,0,0,0.4); border-color: rgba(255,255,255,0.25); color: #fff;">
+              <button id="militia-join-btn" class="secondary-btn"
+                style="font-size: 0.9rem; background: #f97316; color: #fff; border: none;">JOIN ➔</button>
             </div>
-            <div id="militia-guest-status" class="guest-join-status hidden" style="margin-top: 12px; background: rgba(0,0,0,0.3); border-color: rgba(255,255,255,0.2); color: #fed7aa;">
+            <div id="militia-guest-status" class="guest-join-status hidden"
+              style="margin-top: 12px; background: rgba(0,0,0,0.3); border-color: rgba(255,255,255,0.2); color: #fed7aa;">
               <span class="lobby-spinner">🔄</span>
               <span id="militia-guest-status-text">Connecting to Squad Room...</span>
             </div>
@@ -715,7 +755,8 @@
           </div>
 
           <div class="modal-actions" style="margin-top: 16px;">
-            <button id="militia-hub-btn" class="secondary-btn" type="button" style="background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); color: #cbd5e1;">
+            <button id="militia-hub-btn" class="secondary-btn" type="button"
+              style="background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); color: #cbd5e1;">
               BACK TO GAMES HUB 🏠
             </button>
           </div>
@@ -744,10 +785,12 @@
           </div>
 
           <div class="modal-actions">
-            <button id="militia-restart-btn" class="glow-btn" style="background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);">
+            <button id="militia-restart-btn" class="glow-btn"
+              style="background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);">
               PLAY AGAIN 🔄
             </button>
-            <button id="militia-end-hub-btn" class="secondary-btn" type="button" onclick="window.militiaGame && window.militiaGame.exitToHub()">
+            <button id="militia-end-hub-btn" class="secondary-btn" type="button"
+              onclick="window.militiaGame && window.militiaGame.exitToHub()">
               GAMES HUB 🏠
             </button>
           </div>
@@ -912,7 +955,7 @@
 
       if (launchGame1Btn && arena1 && arena2) {
         launchGame1Btn.addEventListener('click', () => {
-          try { history.pushState({ arena: 1 }, '', '#game-garden'); } catch (e) {}
+          try { history.pushState({ arena: 1 }, '', '#game-garden'); } catch (e) { }
           arena2.classList.add('hidden');
           arena1.classList.remove('hidden');
           arena1.scrollIntoView({ behavior: 'smooth' });
@@ -925,7 +968,7 @@
 
       if (launchGame2Btn && arena1 && arena2) {
         launchGame2Btn.addEventListener('click', () => {
-          try { history.pushState({ arena: 2 }, '', '#game-militia'); } catch (e) {}
+          try { history.pushState({ arena: 2 }, '', '#game-militia'); } catch (e) { }
           arena1.classList.add('hidden');
           arena2.classList.remove('hidden');
           arena2.scrollIntoView({ behavior: 'smooth' });
@@ -974,7 +1017,7 @@
           window.militiaGame.exitToHub();
         }
         if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {});
+          document.exitFullscreen().catch(() => { });
         }
         document.documentElement.classList.remove('in-mobile-fullscreen');
         document.body.classList.remove('in-mobile-fullscreen');

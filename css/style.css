@@ -1025,7 +1025,8 @@ body {
 
 .icon-btn {
   background: var(--panel-bg);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border: 1.5px solid var(--panel-border);
   color: var(--text-dark);
   border-radius: 14px;
@@ -1036,14 +1037,21 @@ body {
   justify-content: center;
   cursor: pointer;
   font-size: 1.15rem;
-  box-shadow: 0 6px 18px var(--panel-shadow);
-  transition: all 0.2s ease;
+  box-shadow: 0 4px 14px var(--panel-shadow), inset 0 1px 1px rgba(255, 255, 255, 0.7);
+  transition: all 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   pointer-events: auto;
 }
 
 .icon-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 24px rgba(120, 95, 70, 0.2);
+  transform: translateY(-2px) scale(1.08);
+  border-color: #58c930;
+  box-shadow: 0 8px 22px rgba(88, 201, 48, 0.25), inset 0 1px 1px #ffffff;
+  background: #ffffff;
+}
+
+.icon-btn:active {
+  transform: translateY(1px) scale(0.95);
+  box-shadow: 0 2px 8px var(--panel-shadow);
 }
 
 .hud-bottom {
@@ -2846,4 +2854,168 @@ body.in-mobile-fullscreen {
 .roster-badge.guest {
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: #ffffff;
+}
+
+/* ================= Sleek Floating Arcade Hub Navigation Button ================= */
+.arena-nav-hub-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  padding: 8px 18px 8px 14px;
+  color: #ffffff;
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  cursor: pointer;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+  transition: all 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  text-decoration: none;
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: auto;
+  z-index: 95;
+  flex-shrink: 0;
+}
+
+.arena-nav-hub-btn:hover {
+  transform: translateY(-2px);
+  background: rgba(15, 23, 42, 0.95);
+  border-color: #4ade80;
+  box-shadow: 0 8px 24px rgba(74, 222, 128, 0.35), inset 0 1px 2px rgba(255, 255, 255, 0.45);
+  color: #ffffff;
+}
+
+.arena-nav-hub-btn:active {
+  transform: translateY(1px) scale(0.96);
+}
+
+.hub-nav-arrow {
+  font-size: 1.3rem;
+  line-height: 1;
+  font-weight: 900;
+  color: #4ade80;
+  transition: transform 0.2s ease;
+  display: inline-block;
+}
+
+.arena-nav-hub-btn:hover .hub-nav-arrow {
+  transform: translateX(-3px);
+  color: #86efac;
+}
+
+.hub-nav-icon {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.hub-nav-label {
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  color: #f1f5f9;
+}
+
+/* Militia Battle Theme Variant */
+.arena-nav-hub-btn.militia-theme {
+  background: rgba(15, 23, 42, 0.9);
+  border-color: rgba(249, 115, 22, 0.45);
+}
+
+.arena-nav-hub-btn.militia-theme .hub-nav-arrow {
+  color: #fb923c;
+}
+
+.arena-nav-hub-btn.militia-theme:hover {
+  border-color: #f97316;
+  box-shadow: 0 8px 24px rgba(249, 115, 22, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.4);
+}
+
+.arena-nav-hub-btn.militia-theme:hover .hub-nav-arrow {
+  transform: translateX(-3px);
+  color: #fdba74;
+}
+
+/* Override old mobile exit button styling */
+.mobile-fs-exit {
+  display: none;
+}
+
+.game-arena-container.mobile-fullscreen .mobile-fs-exit,
+.game-arena-container.mobile-fullscreen .arena-nav-hub-btn {
+  display: inline-flex !important;
+}
+
+/* Mobile responsive compact pill */
+@media (max-width: 768px) {
+  .arena-nav-hub-btn {
+    padding: 6px 12px 6px 10px;
+    font-size: 0.75rem;
+    gap: 5px;
+  }
+
+  .hub-nav-label {
+    display: none;
+  }
+
+  .hub-nav-arrow {
+    font-size: 1.15rem;
+  }
+}
+
+/* ================= Network Relay Indicator Badge ================= */
+.network-relay-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-family: var(--font-display);
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #065f46;
+  letter-spacing: 0.3px;
+  margin: 8px 0;
+  width: 100%;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.network-relay-badge.militia-relay {
+  background: rgba(249, 115, 22, 0.15);
+  border-color: rgba(249, 115, 22, 0.4);
+  color: #fed7aa;
+}
+
+.relay-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  animation: relayDotPulse 2s infinite ease-in-out;
+  flex-shrink: 0;
+}
+
+.relay-pulse-dot.orange {
+  background: #f97316;
+  box-shadow: 0 0 8px #f97316;
+}
+
+@keyframes relayDotPulse {
+  0%, 100% {
+    transform: scale(0.9);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
 }
