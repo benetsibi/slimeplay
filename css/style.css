@@ -1530,3 +1530,173 @@ body {
   color: #6b7280;
   font-weight: 600;
 }
+
+/* ================= Pause Modal Stop Game Button ================= */
+.stop-btn {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #ffffff;
+  border: none;
+  padding: 12px 22px;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-size: 0.92rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.stop-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(239, 68, 68, 0.45);
+}
+
+.stop-btn:active {
+  transform: translateY(0);
+}
+
+/* ================= Mobile Fullscreen Arena ================= */
+#game-arena-wrapper.mobile-fullscreen {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  width: 100dvw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  max-width: none !important;
+  max-height: none !important;
+  border-radius: 0 !important;
+  border: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  z-index: 999999 !important;
+  box-shadow: none !important;
+}
+
+/* ================= Mobile Touch Controls (Dynamic Floating Joystick & Action Button) ================= */
+.mobile-touch-overlay {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 25;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+@media (max-width: 900px), (pointer: coarse) {
+  .mobile-touch-overlay {
+    display: block;
+  }
+}
+
+#game-arena-wrapper.mobile-fullscreen .mobile-touch-overlay {
+  display: block;
+}
+
+/* Left zone for dynamic floating joystick */
+.joystick-zone {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 60%;
+  height: 100%;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.virtual-joystick {
+  position: absolute;
+  width: 130px;
+  height: 130px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.virtual-joystick.active {
+  opacity: 1;
+}
+
+.joystick-ring {
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.12) 0%, rgba(88, 201, 48, 0.22) 100%);
+  border: 2.5px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 4px 22px rgba(0, 0, 0, 0.25), inset 0 0 16px rgba(88, 201, 48, 0.2);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.joystick-knob {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #a2f56e 0%, #58c930 65%, #276715 100%);
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.38), inset 0 2px 6px rgba(255, 255, 255, 0.7);
+  position: absolute;
+  top: 39px;
+  left: 39px;
+  pointer-events: none;
+  transform: translate(0, 0);
+  transition: transform 0.04s ease-out;
+}
+
+/* Right side comfortable action shoot button */
+.touch-action-container {
+  position: absolute;
+  bottom: 28px;
+  right: 24px;
+  pointer-events: auto;
+  touch-action: none;
+  z-index: 30;
+}
+
+.touch-shoot-btn {
+  width: 82px;
+  height: 82px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #6ee7b7 0%, #059669 60%, #064e3b 100%);
+  border: 3.5px solid #ffffff;
+  box-shadow: 0 8px 26px rgba(5, 150, 105, 0.55), inset 0 3px 8px rgba(255, 255, 255, 0.75);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.12s ease;
+}
+
+.touch-shoot-btn:active, .touch-shoot-btn.active {
+  transform: scale(0.9);
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.7);
+  background: radial-gradient(circle at 35% 30%, #34d399 0%, #047857 70%, #064e3b 100%);
+}
+
+.touch-btn-bubble {
+  font-size: 1.7rem;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.touch-btn-label {
+  font-family: var(--font-display);
+  font-size: 0.76rem;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}

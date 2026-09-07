@@ -199,6 +199,22 @@ class SlimeMultiplayer {
     });
   }
 
+  broadcastPlayerDied() {
+    if (!this.roomCode) return;
+    this.sendToAll({
+      type: 'PLAYER_DIED',
+      id: this.playerId
+    });
+  }
+
+  broadcastPlayerLeft() {
+    if (!this.roomCode) return;
+    this.sendToAll({
+      type: 'PLAYER_LEFT',
+      id: this.playerId
+    });
+  }
+
   handleMessage(data) {
     if (!data || data.id === this.playerId) return;
 
@@ -237,6 +253,16 @@ class SlimeMultiplayer {
         this.otherPlayer.health = data.health;
         if (data.color) this.otherPlayer.color = data.color;
         if (data.shape) this.otherPlayer.shape = data.shape;
+
+        // If other player's health depleted, this player wins!
+        if (data.health <= 0 && this.game && this.game.state === 'PLAYING') {
+          this.game.triggerGameOverMulti(true);
+        }
+      }
+    } else if (data.type === 'PLAYER_DIED') {
+      // The other player died! You won!
+      if (this.game && this.game.state === 'PLAYING') {
+        this.game.triggerGameOverMulti(true);
       }
     } else if (data.type === 'SHOOT_BUBBLE') {
       if (this.game && this.game.projectiles) {
@@ -245,6 +271,9 @@ class SlimeMultiplayer {
       }
     } else if (data.type === 'PLAYER_LEFT') {
       this.otherPlayer = null;
+      if (this.game && this.game.state === 'PLAYING') {
+        this.game.particles.addTextPopup(this.game.slime.x, this.game.slime.y - 20, 'Friend left the game 🚪', '#f59e0b');
+      }
     }
   }
 

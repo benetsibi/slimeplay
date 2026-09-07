@@ -195,9 +195,22 @@
         </div>
       </div>
 
-      <!-- Mobile Virtual Controls -->
-      <div class="mobile-controls">
-        <button id="touch-shoot-btn" class="touch-btn">POP 🫧</button>
+      <!-- Touch Virtual Joystick & Shoot Overlay (Mobile/Touch Only) -->
+      <div id="mobile-touch-overlay" class="mobile-touch-overlay">
+        <!-- Floating joystick zone on left side -->
+        <div id="joystick-zone" class="joystick-zone">
+          <div id="virtual-joystick" class="virtual-joystick hidden">
+            <div class="joystick-ring"></div>
+            <div class="joystick-knob"></div>
+          </div>
+        </div>
+        <!-- Right side touch action shoot button -->
+        <div class="touch-action-container">
+          <button id="touch-shoot-action-btn" class="touch-shoot-btn" aria-label="Pop Bubbles">
+            <span class="touch-btn-bubble">🫧</span>
+            <span class="touch-btn-label">POP</span>
+          </button>
+        </div>
       </div>
 
       <!-- 1. Clean Mode Selection & Start Modal -->
@@ -386,18 +399,19 @@
             </div>
           </div>
 
-          <div class="modal-actions" style="margin-top: 14px;">
+          <div class="modal-actions" style="margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap;">
             <button id="resume-btn" class="glow-btn">RESUME ▶</button>
+            <button id="pause-stop-btn" class="stop-btn" title="Stop and exit current game">STOP GAME ⏹️</button>
             <button id="pause-home-btn" class="secondary-btn">HOME 🏠</button>
           </div>
         </div>
       </div>
 
-      <!-- 3. Game Over Modal -->
+      <!-- 3. Game Over / Victory Modal -->
       <div id="game-over-modal" class="modal-overlay hidden">
         <div class="glass-card">
-          <h2 class="game-title" style="color: #ea580c;">SQUISHED! (｡•́︿•̀｡)</h2>
-          <p class="game-subtitle">All 100 health points were depleted! Your cute jelly body became a pancake puddle.
+          <h2 id="game-over-title" class="game-title" style="color: #ea580c;">SQUISHED! (｡•́︿•̀｡)</h2>
+          <p id="game-over-subtitle" class="game-subtitle">All 100 health points were depleted! Your cute jelly body became a pancake puddle.
           </p>
 
           <div class="game-over-stats">

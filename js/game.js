@@ -91,6 +91,19 @@ class CuteSlimeGame {
       isDown: false
     };
 
+    // Mobile Dynamic Floating Joystick State
+    this.joystick = {
+      active: false,
+      touchId: null,
+      startX: 0,
+      startY: 0,
+      currentX: 0,
+      currentY: 0,
+      vx: 0, // -1 to 1 normalized
+      vy: 0, // -1 to 1 normalized
+      maxRadius: 46
+    };
+
     this.initWorld();
     this.bindEvents();
     this.checkUrlRoomParams();
@@ -208,6 +221,12 @@ class CuteSlimeGame {
       if (e.code === 'KeyP') {
         this.togglePause();
       }
+      if (e.code === 'KeyV') {
+        this.triggerGameOverMulti(true);
+      }
+      if (e.code === 'KeyL') {
+        this.triggerGameOverMulti(false);
+      }
       if (e.code === 'KeyH') {
         if (this.playerHealth > 50 && !this.isEmergencyReviving) {
           this.playerHealth = 50;
@@ -250,17 +269,7 @@ class CuteSlimeGame {
     });
 
     // Touch support for mobile
-    const shootBtn = document.getElementById('touch-shoot-btn');
-    if (shootBtn) {
-      shootBtn.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        this.keys.shoot = true;
-      });
-      shootBtn.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        this.keys.shoot = false;
-      });
-    }
+    this.initTouchControls();
 
     // Sound toggle
     const soundBtn = document.getElementById('sound-toggle-btn');
@@ -286,6 +295,12 @@ class CuteSlimeGame {
     const resumeBtn = document.getElementById('resume-btn');
     if (resumeBtn) {
       resumeBtn.addEventListener('click', () => this.resumeGame());
+    }
+
+    // Pause Stop Game Button
+    const pauseStopBtn = document.getElementById('pause-stop-btn');
+    if (pauseStopBtn) {
+      pauseStopBtn.addEventListener('click', () => this.stopGame());
     }
 
     // Home buttons
@@ -545,6 +560,139 @@ class CuteSlimeGame {
     }
   }
 
+  // Mobile Device Detection & Touch Control Systems
+  isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+      || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) 
+      || window.innerWidth <= 820;
+  }
+
+  enterMobileFullscreenIfApplicable() {
+    if (this.isMobileDevice()) {
+      const arenaBox = document.getElementById('game-arena-wrapper');
+      if (arenaBox) {
+        arenaBox.classList.add('mobile-fullscreen');
+        document.body.style.overflow = 'hidden';
+        setTimeout(() => this.resize(), 60);
+      }
+    }
+  }
+
+  exitMobileFullscreen() {
+    const arenaBox = document.getElementById('game-arena-wrapper');
+    if (arenaBox) {
+      arenaBox.classList.remove('mobile-fullscreen');
+      document.body.style.overflow = '';
+      setTimeout(() => this.resize(), 60);
+    }
+  }
+
+  initTouchControls() {
+    const zone = document.getElementById('joystick-zone');
+    const virtualStick = document.getElementById('virtual-joystick');
+    const knob = document.getElementById('joystick-knob');
+    const shootActionBtn = document.getElementById('touch-shoot-action-btn');
+    const arenaBox = document.getElementById('game-arena-wrapper');
+
+    if (zone && virtualStick && knob) {
+      zone.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (this.joystick.active) return;
+        const touch = e.changedTouches[0];
+        this.joystick.active = true;
+        this.joystick.touchId = touch.identifier;
+
+        const rect = (arenaBox || zone).getBoundingClientRect();
+        const clientX = touch.clientX - rect.left;
+        const clientY = touch.clientY - rect.top;
+
+        this.joystick.startX = clientX;
+        this.joystick.startY = clientY;
+        this.joystick.currentX = clientX;
+        this.joystick.currentY = clientY;
+        this.joystick.vx = 0;
+        this.joystick.vy = 0;
+
+        virtualStick.style.left = `${clientX}px`;
+        virtualStick.style.top = `${clientY}px`;
+        virtualStick.classList.add('active');
+        knob.style.transform = `translate(0px, 0px)`;
+      }, { passive: false });
+
+      const onTouchMove = (e) => {
+        if (!this.joystick.active) return;
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const touch = e.changedTouches[i];
+          if (touch.identifier === this.joystick.touchId) {
+            e.preventDefault();
+            const rect = (arenaBox || zone).getBoundingClientRect();
+            const clientX = touch.clientX - rect.left;
+            const clientY = touch.clientY - rect.top;
+
+            let dx = clientX - this.joystick.startX;
+            let dy = clientY - this.joystick.startY;
+            const dist = Math.hypot(dx, dy);
+            const maxR = this.joystick.maxRadius;
+
+            if (dist > maxR) {
+              const angle = Math.atan2(dy, dx);
+              dx = Math.cos(angle) * maxR;
+              dy = Math.sin(angle) * maxR;
+            }
+
+            this.joystick.vx = dx / maxR;
+            this.joystick.vy = dy / maxR;
+            this.joystick.currentX = this.joystick.startX + dx;
+            this.joystick.currentY = this.joystick.startY + dy;
+
+            knob.style.transform = `translate(${dx}px, ${dy}px)`;
+            break;
+          }
+        }
+      };
+
+      const onTouchEnd = (e) => {
+        if (!this.joystick.active) return;
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const touch = e.changedTouches[i];
+          if (touch.identifier === this.joystick.touchId) {
+            this.joystick.active = false;
+            this.joystick.touchId = null;
+            this.joystick.vx = 0;
+            this.joystick.vy = 0;
+            virtualStick.classList.remove('active');
+            knob.style.transform = `translate(0px, 0px)`;
+            break;
+          }
+        }
+      };
+
+      zone.addEventListener('touchmove', onTouchMove, { passive: false });
+      zone.addEventListener('touchend', onTouchEnd, { passive: false });
+      zone.addEventListener('touchcancel', onTouchEnd, { passive: false });
+    }
+
+    if (shootActionBtn) {
+      shootActionBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        this.keys.shoot = true;
+        shootActionBtn.classList.add('active');
+      }, { passive: false });
+
+      shootActionBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        this.keys.shoot = false;
+        shootActionBtn.classList.remove('active');
+      }, { passive: false });
+
+      shootActionBtn.addEventListener('touchcancel', (e) => {
+        e.preventDefault();
+        this.keys.shoot = false;
+        shootActionBtn.classList.remove('active');
+      }, { passive: false });
+    }
+  }
+
   // Set Speed & Difficulty Level
   setDifficulty(speed) {
     if (!this.speedConfigs[speed]) return;
@@ -605,6 +753,7 @@ class CuteSlimeGame {
     document.getElementById('start-modal').classList.add('hidden');
     document.getElementById('pause-modal').classList.add('hidden');
     document.getElementById('game-over-modal').classList.add('hidden');
+    this.enterMobileFullscreenIfApplicable();
     this.resize();
     this.resetState();
     this.state = 'PLAYING';
@@ -614,8 +763,16 @@ class CuteSlimeGame {
     window.soundEngine.init();
     document.getElementById('game-over-modal').classList.add('hidden');
     document.getElementById('pause-modal').classList.add('hidden');
+    this.enterMobileFullscreenIfApplicable();
     this.resetState();
     this.state = 'PLAYING';
+  }
+
+  stopGame() {
+    if (this.gameMode === 'multi' && this.multiplayer) {
+      this.multiplayer.broadcastPlayerLeft();
+    }
+    this.goToHome();
   }
 
   togglePause() {
@@ -642,6 +799,7 @@ class CuteSlimeGame {
 
   goToHome() {
     this.state = 'START';
+    this.exitMobileFullscreen();
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => {});
     }
@@ -667,13 +825,44 @@ class CuteSlimeGame {
     this.survivalTime = 0;
     this.spawnTimer = 0;
     this.spawnInterval = this.gameMode === 'multi' ? 140 : 180;
+
+    const titleEl = document.getElementById('game-over-title');
+    const subEl = document.getElementById('game-over-subtitle');
+    const restartBtn = document.getElementById('restart-btn');
+    if (titleEl) {
+      titleEl.innerText = 'SQUISHED! 🥺';
+      titleEl.style.color = '#ef4444';
+    }
+    if (subEl) {
+      subEl.innerText = "Your cute slime got popped! Don't worry, you can try again.";
+    }
+    if (restartBtn) {
+      restartBtn.innerText = 'Play Again 🔄';
+    }
+
     this.updateHUD();
   }
 
   triggerPlayerSquished() {
+    if (this.gameMode === 'multi' && this.multiplayer) {
+      this.multiplayer.broadcastPlayerDied();
+      this.triggerGameOverMulti(false);
+      return;
+    }
+
     this.state = 'GAMEOVER';
     window.soundEngine.playSquished();
     this.camera.shake = 12;
+
+    const titleEl = document.getElementById('game-over-title');
+    const subEl = document.getElementById('game-over-subtitle');
+    if (titleEl) {
+      titleEl.innerText = 'SQUISHED! 🥺';
+      titleEl.style.color = '#ef4444';
+    }
+    if (subEl) {
+      subEl.innerText = "Your cute slime got popped! Don't worry, you can try again.";
+    }
 
     this.particles.spawnBubbleBurst(this.slime.x, this.slime.y, '#84e444', 40);
 
@@ -691,11 +880,71 @@ class CuteSlimeGame {
     }, 500);
   }
 
+  triggerGameOverMulti(isVictory) {
+    this.state = 'GAMEOVER';
+    this.camera.shake = 12;
+
+    const titleEl = document.getElementById('game-over-title');
+    const subEl = document.getElementById('game-over-subtitle');
+    const restartBtn = document.getElementById('restart-btn');
+
+    if (isVictory) {
+      if (window.soundEngine && window.soundEngine.playVictory) {
+        window.soundEngine.playVictory();
+      }
+      if (titleEl) {
+        titleEl.innerText = 'YOU WON! 🏆';
+        titleEl.style.color = '#22c55e';
+      }
+      if (subEl) {
+        subEl.innerText = 'The other player got squished! You survived and claimed victory!';
+      }
+      this.particles.spawnBubbleBurst(this.slime.x, this.slime.y, '#22c55e', 50);
+    } else {
+      if (window.soundEngine && window.soundEngine.playSquished) {
+        window.soundEngine.playSquished();
+      }
+      if (titleEl) {
+        titleEl.innerText = 'YOU LOST / DIED 💀';
+        titleEl.style.color = '#ef4444';
+      }
+      if (subEl) {
+        subEl.innerText = 'You were squished! Player 2 survives as champion!';
+      }
+      this.particles.spawnBubbleBurst(this.slime.x, this.slime.y, '#ef4444', 40);
+    }
+
+    if (restartBtn) {
+      restartBtn.innerText = 'Play Again 🔄';
+    }
+
+    if (this.score > this.highScore) {
+      this.highScore = this.score;
+      localStorage.setItem('cozy_slime_high_score', this.highScore.toString());
+    }
+
+    setTimeout(() => {
+      document.getElementById('final-score').innerText = this.score.toLocaleString();
+      document.getElementById('final-kills').innerText = this.friendsSaved.toString();
+      document.getElementById('final-time').innerText = Math.floor(this.survivalTime) + 's';
+      document.getElementById('final-best').innerText = this.highScore.toLocaleString();
+      document.getElementById('game-over-modal').classList.remove('hidden');
+    }, 450);
+  }
+
   shootBubble() {
     if (this.shootCooldown > 0) return;
     this.shootCooldown = 18;
 
-    const aimAngle = Math.atan2(this.mouse.worldY - this.slime.y, this.mouse.worldX - this.slime.x);
+    let aimAngle;
+    if (this.joystick.active && (this.joystick.vx !== 0 || this.joystick.vy !== 0)) {
+      aimAngle = Math.atan2(this.joystick.vy, this.joystick.vx);
+    } else if (this.isMobileDevice()) {
+      aimAngle = this.slime.facingAngle || 0;
+    } else {
+      aimAngle = Math.atan2(this.mouse.worldY - this.slime.y, this.mouse.worldX - this.slime.x);
+    }
+
     const mouthDist = this.slime.radius + 8;
     const px = this.slime.x + Math.cos(aimAngle) * mouthDist;
     const py = this.slime.y + Math.sin(aimAngle) * mouthDist;
@@ -822,6 +1071,16 @@ class CuteSlimeGame {
     if (this.keys.down) moveY += 1;
     if (this.keys.left) moveX -= 1;
     if (this.keys.right) moveX += 1;
+
+    if (this.joystick && this.joystick.active) {
+      moveX += this.joystick.vx;
+      moveY += this.joystick.vy;
+      const mag = Math.hypot(moveX, moveY);
+      if (mag > 1) {
+        moveX /= mag;
+        moveY /= mag;
+      }
+    }
 
     const isMoving = (moveX !== 0 || moveY !== 0);
     if (isMoving && Math.random() < 0.035) {
