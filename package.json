@@ -4,6 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start": "npx http-server . -p 8080 -c-1",
+    "build": "echo 'Static assets ready'",
     "test": "npx playwright test"
   },
   "repository": {
