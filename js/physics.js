@@ -126,29 +126,33 @@ class SlimePhysics {
     return true;
   }
 
-  update(moveX, moveY, aimX, aimY, obstacles, bounds) {
+  update(moveX, moveY, aimX, aimY, obstacles, bounds, speedOverride) {
     this.bobPhase += 0.07;
 
     if (this.invulnerableTimer > 0) {
       this.invulnerableTimer--;
     }
 
+    const effectiveSpeed = speedOverride !== undefined ? speedOverride : this.speed;
+    const accel = speedOverride !== undefined ? 1.4 : 0.65;
+    const friction = speedOverride !== undefined ? 0.78 : 0.86;
+
     // 1. Movement Acceleration
     if (moveX !== 0 || moveY !== 0) {
       const len = Math.hypot(moveX, moveY);
       const nx = moveX / len;
       const ny = moveY / len;
-      this.vx += nx * 0.65;
-      this.vy += ny * 0.65;
+      this.vx += nx * accel;
+      this.vy += ny * accel;
 
       const curSpeed = Math.hypot(this.vx, this.vy);
-      if (curSpeed > this.speed) {
-        this.vx = (this.vx / curSpeed) * this.speed;
-        this.vy = (this.vy / curSpeed) * this.speed;
+      if (curSpeed > effectiveSpeed) {
+        this.vx = (this.vx / curSpeed) * effectiveSpeed;
+        this.vy = (this.vy / curSpeed) * effectiveSpeed;
       }
     } else {
-      this.vx *= 0.86;
-      this.vy *= 0.86;
+      this.vx *= friction;
+      this.vy *= friction;
     }
 
     this.x += this.vx;

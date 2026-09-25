@@ -205,7 +205,12 @@ class MilitiaMultiplayer {
 
   getShareableLink() {
     if (!this.roomCode) return window.location.href;
-    const url = new URL(window.location.href);
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    let base = window.location.origin + window.location.pathname;
+    if (isLocal) {
+      base = 'https://benetsibi.github.io/SlimePlay/';
+    }
+    const url = new URL(base);
     url.searchParams.set('militia', this.roomCode);
     return url.toString();
   }
@@ -214,6 +219,48 @@ class MilitiaMultiplayer {
     this.disconnect();
     const cleanCode = this.normalizeCode(this.roomCode);
     if (!cleanCode) return;
+
+    // 0. Firebase Realtime Database (100% reliable cloud sync across cellular & firewalls)
+    if (window.slimeFirebase && window.slimeFirebase.isAvailable()) {
+      window.slimeFirebase.joinRoom(
+        cleanCode,
+        this.playerId,
+        {
+          isHost: this.isHost,
+          name: this.isHost ? 'Host (Creator)' : 'Squad Friend',
+          color: this.game ? this.game.selectedColor : 'azure',
+          shape: this.game ? this.game.selectedShape : 'classic'
+        },
+        (remotePlayer) => {
+          this.ensurePlayer(remotePlayer.id, remotePlayer.color, remotePlayer.shape, remotePlayer.name);
+          const p = this.players.get(remotePlayer.id);
+          if (p && remotePlayer.x !== undefined) {
+            p.x += (remotePlayer.x - p.x) * 0.65;
+            p.y += (remotePlayer.y - p.y) * 0.65;
+            p.vx = remotePlayer.vx;
+            p.vy = remotePlayer.vy;
+            p.facingAngle = remotePlayer.facingAngle;
+            p.health = remotePlayer.health;
+            p.lives = remotePlayer.lives;
+            p.inCover = remotePlayer.inCover;
+            p.isJetpacking = remotePlayer.isJetpacking;
+            p.invulnerableTimer = remotePlayer.invulnerableTimer;
+          }
+          if (this.game) this.game.updateLobbyRoster();
+        },
+        (event) => {
+          this.handleMessage(event);
+        },
+        (leftPlayerId) => {
+          this.players.delete(leftPlayerId);
+          if (this.game) this.game.updateLobbyRoster();
+        }
+      );
+      const hostStatus = document.getElementById('militia-host-status-text');
+      const guestStatus = document.getElementById('militia-guest-status-text');
+      if (this.isHost && hostStatus) hostStatus.innerText = '🔥 Cloud Battle Room is LIVE on Firebase!';
+      if (!this.isHost && guestStatus) guestStatus.innerText = '✅ Connected to Cloud Squad Battle Room!';
+    }
 
     // 1. BroadcastChannel for zero-latency local testing
     try {
@@ -243,7 +290,7 @@ class MilitiaMultiplayer {
 
           this.peer.on('connection', (conn) => {
             this.peerConnections.push(conn);
-            conn.on('open', () => {
+            const sendAck = () => {
               conn.send({
                 type: 'MILITIA_ACK',
                 id: this.playerId,
@@ -251,7 +298,10 @@ class MilitiaMultiplayer {
                 color: this.game ? this.game.selectedColor : 'azure',
                 shape: this.game ? this.game.selectedShape : 'classic'
               });
-            });
+            };
+            if (conn.open) sendAck();
+            else conn.on('open', sendAck);
+
             conn.on('data', (data) => {
               this.handleMessage(data);
               // Mesh relay: forward to all other connected peers
@@ -279,7 +329,7 @@ class MilitiaMultiplayer {
             const guestStatus = document.getElementById('militia-guest-status-text');
             if (guestStatus) guestStatus.innerHTML = `📡 Connecting to Host across network...`;
 
-            const conn = this.peer.connect(hostPeerId, { reliable: true });
+            const conn = this.peer.connect(hostPeerId);
 
             // Watchdog timer: if not open after 6 seconds, inform connecting via global relay
             const connectTimeout = setTimeout(() => {
@@ -288,9 +338,11 @@ class MilitiaMultiplayer {
               }
             }, 6000);
 
-            conn.on('open', () => {
+            const sendJoin = () => {
               clearTimeout(connectTimeout);
-              this.peerConnections.push(conn);
+              if (!this.peerConnections.includes(conn)) {
+                this.peerConnections.push(conn);
+              }
               conn.send({
                 type: 'MILITIA_JOIN',
                 id: this.playerId,
@@ -299,7 +351,11 @@ class MilitiaMultiplayer {
                 shape: this.game ? this.game.selectedShape : 'classic'
               });
               if (guestStatus) guestStatus.innerHTML = `✅ Connected to Squad! Waiting for host to deploy battle...`;
-            });
+            };
+
+            if (conn.open) sendJoin();
+            else conn.on('open', sendJoin);
+
             conn.on('data', (data) => this.handleMessage(data));
             conn.on('close', () => {
               clearTimeout(connectTimeout);
@@ -325,6 +381,13 @@ class MilitiaMultiplayer {
   }
 
   sendToAll(data) {
+    if (window.slimeFirebase && window.slimeFirebase.isAvailable() && this.roomCode) {
+      if (data.type === 'MILITIA_SYNC') {
+        window.slimeFirebase.syncPlayerState(this.playerId, data);
+      } else {
+        window.slimeFirebase.sendEvent(this.roomCode, data, this.playerId);
+      }
+    }
     if (this.channel) {
       try { this.channel.postMessage(data); } catch (e) {}
     }
@@ -336,6 +399,9 @@ class MilitiaMultiplayer {
   }
 
   disconnect() {
+    if (window.slimeFirebase && window.slimeFirebase.isAvailable()) {
+      window.slimeFirebase.leaveRoom(this.playerId);
+    }
     if (this.channel) {
       try { this.channel.close(); } catch (e) {}
       this.channel = null;
@@ -387,7 +453,7 @@ class MilitiaMultiplayer {
       }
     } else if (data.type === 'MILITIA_SHOOT') {
       if (this.game) {
-        this.game.projectiles.push(new WaterBubble(data.px, data.py, data.angle, 13.0, data.id, '#f97316'));
+        this.game.projectiles.push(new WaterBubble(data.px, data.py, data.angle, 26.0, data.id, '#f97316'));
         if (window.soundEngine) window.soundEngine.playBubblePop();
       }
     } else if (data.type === 'MILITIA_GRENADE') {
@@ -531,7 +597,7 @@ class SlimeMilitiaGame {
     this.camera = { x: 0, y: 0, shake: 0 };
 
     this.keys = { up: false, down: false, left: false, right: false, shoot: false, grenade: false, jetpack: false };
-    this.mouse = { screenX: 0, screenY: 0, worldX: 0, worldY: 0, isDown: false };
+    this.mouse = { screenX: window.innerWidth / 2, screenY: window.innerHeight / 2, worldX: 0, worldY: 0, isDown: false };
     this.joystick = { active: false, touchId: null, startX: 0, startY: 0, vx: 0, vy: 0, maxRadius: 46 };
 
     this.multiplayer = new MilitiaMultiplayer(this);
@@ -547,7 +613,7 @@ class SlimeMilitiaGame {
   checkUrlParams() {
     const params = new URLSearchParams(window.location.search);
     const code = params.get('militia');
-    if (code) {
+    if (code && code.trim().length >= 4) {
       const arena1 = document.getElementById('game-arena-wrapper');
       const arena2 = document.getElementById('game-arena-wrapper-2');
       if (arena1 && arena2) {
@@ -567,6 +633,16 @@ class SlimeMilitiaGame {
         tabCreate.classList.remove('active');
         tabJoin.classList.add('active');
       }
+      const statusBox = document.getElementById('militia-guest-status');
+      const statusText = document.getElementById('militia-guest-status-text');
+      const joinBtn = document.getElementById('militia-join-btn');
+      if (statusBox) statusBox.classList.remove('hidden');
+      if (statusText) statusText.innerText = `Connecting to Battle Room ${code.trim().toUpperCase()}...`;
+      if (joinBtn) {
+        joinBtn.disabled = true;
+        joinBtn.innerText = 'Connecting...';
+      }
+      this.multiplayer.joinRoom(code);
     }
   }
 
@@ -738,11 +814,16 @@ class SlimeMilitiaGame {
     if (copyLinkBtn) {
       copyLinkBtn.addEventListener('click', () => {
         const link = this.multiplayer.getShareableLink();
-        if (navigator.clipboard) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(link).then(() => {
-            copyLinkBtn.innerText = 'Copied Link to Clipboard! ✅';
-            setTimeout(() => { copyLinkBtn.innerText = 'Copy Invite Link 📋'; }, 2000);
+            copyLinkBtn.innerText = 'Copied Battle Link! 🌍';
+            this.particles.addTextPopup(this.slime.x, this.slime.y - 20, 'Copied Public Link for Friends! 🌍', '#22c55e');
+            setTimeout(() => { copyLinkBtn.innerText = 'Copy Invite Link 📋'; }, 2200);
+          }).catch(() => {
+            prompt('Copy this Squad Battle link and send to friends anywhere in the world:', link);
           });
+        } else {
+          prompt('Copy this Squad Battle link and send to friends anywhere in the world:', link);
         }
       });
     }
@@ -832,6 +913,14 @@ class SlimeMilitiaGame {
     const wrapper = document.getElementById('game-arena-wrapper-2');
 
     if (zone && virtualStick && knob) {
+      const getStickOrigin = () => {
+        const rect = virtualStick.getBoundingClientRect();
+        return {
+          x: rect.left + rect.width / 2,
+          y: rect.top + rect.height / 2
+        };
+      };
+
       zone.addEventListener('touchstart', (e) => {
         e.preventDefault();
         if (this.joystick.active) return;
@@ -839,18 +928,23 @@ class SlimeMilitiaGame {
         this.joystick.active = true;
         this.joystick.touchId = touch.identifier;
 
-        const rect = (wrapper || zone).getBoundingClientRect();
-        const clientX = touch.clientX - rect.left;
-        const clientY = touch.clientY - rect.top;
-        this.joystick.startX = clientX;
-        this.joystick.startY = clientY;
-        this.joystick.vx = 0;
-        this.joystick.vy = 0;
+        const origin = getStickOrigin();
+        let dx = touch.clientX - origin.x;
+        let dy = touch.clientY - origin.y;
+        const maxR = this.joystick.maxRadius || 50;
+        const dist = Math.hypot(dx, dy);
 
-        virtualStick.style.left = `${clientX}px`;
-        virtualStick.style.top = `${clientY}px`;
+        if (dist > maxR) {
+          const angle = Math.atan2(dy, dx);
+          dx = Math.cos(angle) * maxR;
+          dy = Math.sin(angle) * maxR;
+        }
+
+        this.joystick.vx = dx / maxR;
+        this.joystick.vy = dy / maxR;
+
         virtualStick.classList.add('active');
-        knob.style.transform = `translate(0px, 0px)`;
+        knob.style.transform = `translate(${dx}px, ${dy}px)`;
       }, { passive: false });
 
       const onMove = (e) => {
@@ -859,20 +953,21 @@ class SlimeMilitiaGame {
           const touch = e.changedTouches[i];
           if (touch.identifier === this.joystick.touchId) {
             e.preventDefault();
-            const rect = (wrapper || zone).getBoundingClientRect();
-            const clientX = touch.clientX - rect.left;
-            const clientY = touch.clientY - rect.top;
-            let dx = clientX - this.joystick.startX;
-            let dy = clientY - this.joystick.startY;
+            const origin = getStickOrigin();
+            let dx = touch.clientX - origin.x;
+            let dy = touch.clientY - origin.y;
+            const maxR = this.joystick.maxRadius || 50;
             const dist = Math.hypot(dx, dy);
-            const maxR = this.joystick.maxRadius;
+
             if (dist > maxR) {
               const angle = Math.atan2(dy, dx);
               dx = Math.cos(angle) * maxR;
               dy = Math.sin(angle) * maxR;
             }
+
             this.joystick.vx = dx / maxR;
             this.joystick.vy = dy / maxR;
+
             knob.style.transform = `translate(${dx}px, ${dy}px)`;
             break;
           }
@@ -888,7 +983,7 @@ class SlimeMilitiaGame {
             this.joystick.vx = 0;
             this.joystick.vy = 0;
             virtualStick.classList.remove('active');
-            knob.style.transform = `translate(0px, 0px)`;
+            knob.style.transform = 'translate(0px, 0px)';
             break;
           }
         }
@@ -899,23 +994,76 @@ class SlimeMilitiaGame {
       zone.addEventListener('touchcancel', onEnd, { passive: false });
     }
 
+    // Primary FIRE Button (shoot water bullets rapidly)
     if (shootBtn) {
-      shootBtn.addEventListener('touchstart', (e) => { e.preventDefault(); this.keys.shoot = true; }, { passive: false });
-      shootBtn.addEventListener('touchend', (e) => { e.preventDefault(); this.keys.shoot = false; }, { passive: false });
+      const activateShoot = (e) => {
+        if (e.cancelable) e.preventDefault();
+        this.keys.shoot = true;
+        shootBtn.classList.add('active');
+      };
+      const deactivateShoot = (e) => {
+        if (e && e.cancelable) e.preventDefault();
+        this.keys.shoot = false;
+        shootBtn.classList.remove('active');
+      };
+
+      shootBtn.addEventListener('touchstart', activateShoot, { passive: false });
+      shootBtn.addEventListener('touchend', deactivateShoot, { passive: false });
+      shootBtn.addEventListener('touchcancel', deactivateShoot, { passive: false });
+      shootBtn.addEventListener('mousedown', activateShoot);
+      shootBtn.addEventListener('mouseup', deactivateShoot);
     }
+
+    // Grenade Bomb Button
     if (grenadeBtn) {
-      grenadeBtn.addEventListener('touchstart', (e) => { e.preventDefault(); this.throwGrenade(); }, { passive: false });
+      const triggerGrenade = (e) => {
+        if (e.cancelable) e.preventDefault();
+        grenadeBtn.classList.add('active');
+        this.throwGrenade();
+        setTimeout(() => grenadeBtn.classList.remove('active'), 180);
+      };
+      grenadeBtn.addEventListener('touchstart', triggerGrenade, { passive: false });
+      grenadeBtn.addEventListener('click', triggerGrenade);
     }
+
+    // Jetpack Nitro Boost Button
     if (jetpackBtn) {
-      jetpackBtn.addEventListener('touchstart', (e) => { e.preventDefault(); this.keys.jetpack = true; }, { passive: false });
-      jetpackBtn.addEventListener('touchend', (e) => { e.preventDefault(); this.keys.jetpack = false; }, { passive: false });
+      const activateJetpack = (e) => {
+        if (e.cancelable) e.preventDefault();
+        this.keys.jetpack = true;
+        jetpackBtn.classList.add('active');
+      };
+      const deactivateJetpack = (e) => {
+        if (e && e.cancelable) e.preventDefault();
+        this.keys.jetpack = false;
+        jetpackBtn.classList.remove('active');
+      };
+
+      jetpackBtn.addEventListener('touchstart', activateJetpack, { passive: false });
+      jetpackBtn.addEventListener('touchend', deactivateJetpack, { passive: false });
+      jetpackBtn.addEventListener('touchcancel', deactivateJetpack, { passive: false });
+      jetpackBtn.addEventListener('mousedown', activateJetpack);
+      jetpackBtn.addEventListener('mouseup', deactivateJetpack);
     }
+
+    // Connect landscape rotate button to fullscreen and landscape lock
+    document.querySelectorAll('#game-arena-wrapper-2 .rotate-lock-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.enterMobileFullscreen();
+      });
+    });
   }
 
   isMobileDevice() {
     const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    const isSmall = window.innerWidth <= 768;
-    return isMobileUA || isSmall;
+    const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    const isSmall = window.innerWidth <= 1024;
+    const isMobile = isMobileUA || (hasTouch && isSmall);
+    if (isMobile) {
+      document.body.classList.add('mobile-device');
+    }
+    return isMobile;
   }
 
   enterMobileFullscreen() {
@@ -925,6 +1073,25 @@ class SlimeMilitiaGame {
       wrapper.classList.add('mobile-fullscreen');
       document.documentElement.classList.add('in-mobile-fullscreen');
       document.body.classList.add('in-mobile-fullscreen');
+
+      // Request fullscreen to unlock programmatic screen orientation lock
+      try {
+        const reqFs = wrapper.requestFullscreen || wrapper.webkitRequestFullscreen || wrapper.mozRequestFullScreen || wrapper.msRequestFullscreen;
+        if (reqFs && !document.fullscreenElement) {
+          const p = reqFs.call(wrapper);
+          if (p && p.then) {
+            p.then(() => {
+              if (screen.orientation && screen.orientation.lock) {
+                screen.orientation.lock('landscape').catch(() => {});
+              }
+            }).catch(() => {});
+          }
+        }
+        if (screen.orientation && screen.orientation.lock) {
+          screen.orientation.lock('landscape').catch(() => {});
+        }
+      } catch (e) {}
+
       this.resize();
       setTimeout(() => this.resize(), 80);
       setTimeout(() => this.resize(), 250);
@@ -1051,7 +1218,7 @@ class SlimeMilitiaGame {
 
   shootBubble() {
     if (this.shootCooldown > 0) return;
-    this.shootCooldown = 13;
+    this.shootCooldown = 7;
 
     let aimAngle;
     if (this.joystick && this.joystick.active && (this.joystick.vx !== 0 || this.joystick.vy !== 0)) {
@@ -1064,9 +1231,11 @@ class SlimeMilitiaGame {
 
     const px = this.slime.x + Math.cos(aimAngle) * 44;
     const py = this.slime.y + Math.sin(aimAngle) * 44;
-    this.projectiles.push(new WaterBubble(px, py, aimAngle, 13.5, 'local', '#38bdf8'));
+    this.projectiles.push(new WaterBubble(px, py, aimAngle, 26.0, 'local', '#38bdf8'));
     this.multiplayer.broadcastShoot(px, py, aimAngle);
     this.slime.triggerPop(aimAngle);
+    this.particles.spawnBubbleBurst(px, py, '#38bdf8', 3);
+    this.camera.shake = Math.min(8, this.camera.shake + 2.5);
 
     if (window.soundEngine) window.soundEngine.playBubblePop();
   }
@@ -1110,12 +1279,15 @@ class SlimeMilitiaGame {
 
     let speedMult = 1.0;
     if (this.keys.jetpack && this.nitro > 0 && (moveX !== 0 || moveY !== 0)) {
-      speedMult = 1.9;
+      speedMult = 1.85;
       this.nitro = Math.max(0, this.nitro - 0.45);
       this.isJetpacking = true;
+      if (Math.random() < 0.4) {
+        this.particles.spawnBubbleBurst(this.slime.x, this.slime.y + 18, '#38bdf8', 1);
+      }
     } else {
       this.isJetpacking = false;
-      this.nitro = Math.min(100, this.nitro + 0.16);
+      this.nitro = Math.min(100, this.nitro + 0.20);
     }
 
     if (this.respawnTimer > 0) {
@@ -1131,7 +1303,7 @@ class SlimeMilitiaGame {
     } else {
       if (this.invulnerableTimer > 0) this.invulnerableTimer--;
 
-      const baseSpeed = 5.8 * speedMult;
+      const baseSpeed = 6.6 * speedMult;
       this.slime.update(moveX, moveY, this.mouse.worldX, this.mouse.worldY, this.obstacles, this.worldBounds, baseSpeed);
 
       // Check if hiding in camouflage bushes

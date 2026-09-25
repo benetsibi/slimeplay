@@ -485,10 +485,16 @@ class CuteSlimeGame {
     if (copyCodeBtn) {
       copyCodeBtn.addEventListener('click', () => {
         const shareLink = this.multiplayer.getShareableLink();
-        navigator.clipboard.writeText(shareLink).then(() => {
-          copyCodeBtn.innerText = 'Link Copied! ✓';
-          setTimeout(() => { copyCodeBtn.innerText = 'Copy Share Link 📋'; }, 2500);
-        });
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(shareLink).then(() => {
+            copyCodeBtn.innerText = 'Link Copied! 🌍';
+            setTimeout(() => { copyCodeBtn.innerText = 'Copy Share Link 📋'; }, 2500);
+          }).catch(() => {
+            prompt('Copy this room link and send to friends anywhere in the world:', shareLink);
+          });
+        } else {
+          prompt('Copy this room link and send to friends anywhere in the world:', shareLink);
+        }
       });
     }
 
@@ -500,12 +506,23 @@ class CuteSlimeGame {
       });
     }
 
-    // Auto-detect ?room= in URL so opening a friend's shared link automatically fills room code!
+    // Auto-detect ?room= in URL so opening a friend's shared link automatically fills room code and connects!
     const urlParams = new URLSearchParams(window.location.search);
     const roomParam = urlParams.get('room');
-    if (roomParam) {
+    if (roomParam && roomParam.trim().length >= 4) {
+      const cleanParam = roomParam.trim().toUpperCase();
+      const arena1 = document.getElementById('game-arena-wrapper');
+      const arena2 = document.getElementById('game-arena-wrapper-2');
+      if (arena1 && arena2) {
+        arena1.classList.remove('hidden');
+        arena2.classList.add('hidden');
+        arena1.scrollIntoView({ behavior: 'smooth' });
+      }
+      const startModal = document.getElementById('start-modal');
+      if (startModal) startModal.classList.remove('hidden');
+
       const joinInput = document.getElementById('join-code-input');
-      if (joinInput) joinInput.value = roomParam.trim().toUpperCase();
+      if (joinInput) joinInput.value = cleanParam;
       const singleTab = document.getElementById('select-single-tab');
       const multiTab = document.getElementById('select-multi-tab');
       const singleBox = document.getElementById('single-mode-box');
@@ -516,6 +533,16 @@ class CuteSlimeGame {
         singleBox.classList.add('hidden');
         multiBox.classList.remove('hidden');
       }
+      const guestBox = document.getElementById('guest-join-status');
+      const guestText = document.getElementById('guest-status-text');
+      const joinRoomBtn = document.getElementById('join-room-btn');
+      if (guestBox) guestBox.classList.remove('hidden');
+      if (guestText) guestText.innerText = `Connecting to room ${cleanParam}...`;
+      if (joinRoomBtn) {
+        joinRoomBtn.disabled = true;
+        joinRoomBtn.innerText = 'Connecting...';
+      }
+      this.multiplayer.joinRoom(cleanParam);
     }
 
     // Slime Customization in Pause Menu
@@ -652,8 +679,12 @@ class CuteSlimeGame {
   isMobileDevice() {
     const hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
     const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    const isNarrow = window.innerWidth <= 950;
-    return isMobileUA || (hasTouch && (isNarrow || navigator.maxTouchPoints > 1)) || isNarrow;
+    const isNarrow = window.innerWidth <= 1024;
+    const isMobile = isMobileUA || (hasTouch && isNarrow) || isNarrow;
+    if (isMobile) {
+      document.body.classList.add('mobile-device');
+    }
+    return isMobile;
   }
 
   enterMobileFullscreenIfApplicable() {
@@ -664,6 +695,25 @@ class CuteSlimeGame {
       document.documentElement.classList.add('in-mobile-fullscreen');
       document.body.classList.add('in-mobile-fullscreen');
       document.body.style.overflow = 'hidden';
+
+      // Request fullscreen to unlock programmatic screen orientation lock
+      try {
+        const reqFs = arenaBox.requestFullscreen || arenaBox.webkitRequestFullscreen || arenaBox.mozRequestFullScreen || arenaBox.msRequestFullscreen;
+        if (reqFs && !document.fullscreenElement) {
+          const p = reqFs.call(arenaBox);
+          if (p && p.then) {
+            p.then(() => {
+              if (screen.orientation && screen.orientation.lock) {
+                screen.orientation.lock('landscape').catch(() => {});
+              }
+            }).catch(() => {});
+          }
+        }
+        if (screen.orientation && screen.orientation.lock) {
+          screen.orientation.lock('landscape').catch(() => {});
+        }
+      } catch (e) {}
+
       // Trigger multiple resizes to adjust as iOS Safari toolbar settles
       this.resize();
       setTimeout(() => this.resize(), 60);
@@ -699,6 +749,14 @@ class CuteSlimeGame {
     const arenaBox = document.getElementById('game-arena-wrapper');
 
     if (zone && virtualStick && knob) {
+      const getStickOrigin = () => {
+        const rect = virtualStick.getBoundingClientRect();
+        return {
+          x: rect.left + rect.width / 2,
+          y: rect.top + rect.height / 2
+        };
+      };
+
       zone.addEventListener('touchstart', (e) => {
         e.preventDefault();
         if (this.joystick.active) return;
@@ -706,21 +764,23 @@ class CuteSlimeGame {
         this.joystick.active = true;
         this.joystick.touchId = touch.identifier;
 
-        const rect = (arenaBox || zone).getBoundingClientRect();
-        const clientX = touch.clientX - rect.left;
-        const clientY = touch.clientY - rect.top;
+        const origin = getStickOrigin();
+        let dx = touch.clientX - origin.x;
+        let dy = touch.clientY - origin.y;
+        const maxR = this.joystick.maxRadius || 45;
+        const dist = Math.hypot(dx, dy);
 
-        this.joystick.startX = clientX;
-        this.joystick.startY = clientY;
-        this.joystick.currentX = clientX;
-        this.joystick.currentY = clientY;
-        this.joystick.vx = 0;
-        this.joystick.vy = 0;
+        if (dist > maxR) {
+          const angle = Math.atan2(dy, dx);
+          dx = Math.cos(angle) * maxR;
+          dy = Math.sin(angle) * maxR;
+        }
 
-        virtualStick.style.left = `${clientX}px`;
-        virtualStick.style.top = `${clientY}px`;
+        this.joystick.vx = dx / maxR;
+        this.joystick.vy = dy / maxR;
+
         virtualStick.classList.add('active');
-        knob.style.transform = `translate(0px, 0px)`;
+        knob.style.transform = `translate(${dx}px, ${dy}px)`;
       }, { passive: false });
 
       const onTouchMove = (e) => {
@@ -729,14 +789,11 @@ class CuteSlimeGame {
           const touch = e.changedTouches[i];
           if (touch.identifier === this.joystick.touchId) {
             e.preventDefault();
-            const rect = (arenaBox || zone).getBoundingClientRect();
-            const clientX = touch.clientX - rect.left;
-            const clientY = touch.clientY - rect.top;
-
-            let dx = clientX - this.joystick.startX;
-            let dy = clientY - this.joystick.startY;
+            const origin = getStickOrigin();
+            let dx = touch.clientX - origin.x;
+            let dy = touch.clientY - origin.y;
+            const maxR = this.joystick.maxRadius || 45;
             const dist = Math.hypot(dx, dy);
-            const maxR = this.joystick.maxRadius;
 
             if (dist > maxR) {
               const angle = Math.atan2(dy, dx);
@@ -746,8 +803,6 @@ class CuteSlimeGame {
 
             this.joystick.vx = dx / maxR;
             this.joystick.vy = dy / maxR;
-            this.joystick.currentX = this.joystick.startX + dx;
-            this.joystick.currentY = this.joystick.startY + dy;
 
             knob.style.transform = `translate(${dx}px, ${dy}px)`;
             break;
@@ -765,7 +820,7 @@ class CuteSlimeGame {
             this.joystick.vx = 0;
             this.joystick.vy = 0;
             virtualStick.classList.remove('active');
-            knob.style.transform = `translate(0px, 0px)`;
+            knob.style.transform = 'translate(0px, 0px)';
             break;
           }
         }
@@ -777,24 +832,31 @@ class CuteSlimeGame {
     }
 
     if (shootActionBtn) {
-      shootActionBtn.addEventListener('touchstart', (e) => {
-        e.preventDefault();
+      const activateShoot = (e) => {
+        if (e.cancelable) e.preventDefault();
         this.keys.shoot = true;
         shootActionBtn.classList.add('active');
-      }, { passive: false });
-
-      shootActionBtn.addEventListener('touchend', (e) => {
-        e.preventDefault();
+      };
+      const deactivateShoot = (e) => {
+        if (e && e.cancelable) e.preventDefault();
         this.keys.shoot = false;
         shootActionBtn.classList.remove('active');
-      }, { passive: false });
+      };
 
-      shootActionBtn.addEventListener('touchcancel', (e) => {
-        e.preventDefault();
-        this.keys.shoot = false;
-        shootActionBtn.classList.remove('active');
-      }, { passive: false });
+      shootActionBtn.addEventListener('touchstart', activateShoot, { passive: false });
+      shootActionBtn.addEventListener('touchend', deactivateShoot, { passive: false });
+      shootActionBtn.addEventListener('touchcancel', deactivateShoot, { passive: false });
+      shootActionBtn.addEventListener('mousedown', activateShoot);
+      shootActionBtn.addEventListener('mouseup', deactivateShoot);
     }
+
+    // Connect landscape rotate button to fullscreen and landscape lock
+    document.querySelectorAll('#game-arena-wrapper .rotate-lock-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.enterMobileFullscreenIfApplicable();
+      });
+    });
   }
 
   // Set Speed & Difficulty Level

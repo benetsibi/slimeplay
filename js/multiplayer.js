@@ -76,7 +76,12 @@ class SlimeMultiplayer {
 
   getShareableLink() {
     if (!this.roomCode) return window.location.href;
-    const url = new URL(window.location.href);
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    let base = window.location.origin + window.location.pathname;
+    if (isLocal) {
+      base = 'https://benetsibi.github.io/SlimePlay/';
+    }
+    const url = new URL(base);
     url.searchParams.set('room', this.roomCode);
     return url.toString();
   }
@@ -87,6 +92,43 @@ class SlimeMultiplayer {
 
     const cleanCode = this.normalizeCode(this.roomCode);
     if (!cleanCode) return;
+
+    // 0. Firebase Realtime Database (100% reliable cloud sync across cellular & firewalls)
+    if (window.slimeFirebase && window.slimeFirebase.isAvailable()) {
+      window.slimeFirebase.joinRoom(
+        cleanCode,
+        this.playerId,
+        {
+          isHost: this.isHost,
+          time: Date.now()
+        },
+        (remotePlayer) => {
+          this.ensurePlayer(remotePlayer.id);
+          const p = this.players.get(remotePlayer.id);
+          if (p && remotePlayer.x !== undefined) {
+            p.x = remotePlayer.x;
+            p.y = remotePlayer.y;
+            p.vx = remotePlayer.vx || 0;
+            p.vy = remotePlayer.vy || 0;
+            p.facingAngle = remotePlayer.facingAngle || 0;
+            p.color = remotePlayer.color || p.color;
+            p.shape = remotePlayer.shape || p.shape;
+          }
+          if (this.game) this.game.updateLobbyPlayerCount();
+        },
+        (event) => {
+          this.handleMessage(event);
+        },
+        (leftPlayerId) => {
+          this.players.delete(leftPlayerId);
+          if (this.game) this.game.updateLobbyPlayerCount();
+        }
+      );
+      const hostStatus = document.getElementById('lobby-status-text');
+      const guestText = document.getElementById('guest-status-text');
+      if (this.isHost && hostStatus) hostStatus.innerText = '🔥 Cloud Room LIVE on Firebase! Ready for friends.';
+      if (!this.isHost && guestText) guestText.innerText = '✅ Connected to Cloud Room!';
+    }
 
     // 2. Setup Local BroadcastChannel (instant zero-latency sync on same machine/browser tabs)
     try {
@@ -117,13 +159,16 @@ class SlimeMultiplayer {
 
           this.peer.on('connection', (conn) => {
             this.peerConnections.push(conn);
-            conn.on('open', () => {
+            const sendAck = () => {
               conn.send({
                 type: 'PLAYER_ACK',
                 id: this.playerId,
                 isHost: true
               });
-            });
+            };
+            if (conn.open) sendAck();
+            else conn.on('open', sendAck);
+
             conn.on('data', (data) => {
               this.handleMessage(data);
               // Relay to all other connected peers for 2+ players!
@@ -153,7 +198,7 @@ class SlimeMultiplayer {
             const guestText = document.getElementById('guest-status-text');
             if (guestText) guestText.innerHTML = `📡 Connecting to Host across network...`;
 
-            const conn = this.peer.connect(hostPeerId, { reliable: true });
+            const conn = this.peer.connect(hostPeerId);
 
             // Watchdog timer: If not open after 6 seconds, notify connecting via relay
             const connectTimeout = setTimeout(() => {
@@ -162,9 +207,11 @@ class SlimeMultiplayer {
               }
             }, 6000);
 
-            conn.on('open', () => {
+            const sendJoin = () => {
               clearTimeout(connectTimeout);
-              this.peerConnections.push(conn);
+              if (!this.peerConnections.includes(conn)) {
+                this.peerConnections.push(conn);
+              }
               conn.send({
                 type: 'PLAYER_JOINED',
                 id: this.playerId,
@@ -172,7 +219,11 @@ class SlimeMultiplayer {
                 time: Date.now()
               });
               if (guestText) guestText.innerHTML = `✅ Connected to Room! Launching with host...`;
-            });
+            };
+
+            if (conn.open) sendJoin();
+            else conn.on('open', sendJoin);
+
             conn.on('data', (data) => this.handleMessage(data));
             conn.on('close', () => {
               clearTimeout(connectTimeout);
@@ -199,6 +250,15 @@ class SlimeMultiplayer {
   }
 
   sendToAll(data) {
+    // Sync over Firebase Realtime Database
+    if (window.slimeFirebase && window.slimeFirebase.isAvailable() && this.roomCode) {
+      if (data.type === 'PLAYER_SYNC') {
+        window.slimeFirebase.syncPlayerState(this.playerId, data);
+      } else {
+        window.slimeFirebase.sendEvent(this.roomCode, data, this.playerId);
+      }
+    }
+
     // Send over BroadcastChannel
     if (this.channel) {
       try {
@@ -220,6 +280,9 @@ class SlimeMultiplayer {
   }
 
   disconnect() {
+    if (window.slimeFirebase && window.slimeFirebase.isAvailable()) {
+      window.slimeFirebase.leaveRoom(this.playerId);
+    }
     if (this.channel) {
       try {
         this.channel.close();
